@@ -1,0 +1,101 @@
+.navbar {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.navbar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.navbar-logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #667eea;
+  text-decoration: none;
+}
+
+.navbar-links {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.nav-link {
+  color: #333;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s;
+}
+
+.nav-link:hover {
+  color: #667eea;
+}
+
+.navbar-profile {
+  position: relative;
+}
+
+.profile-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s;
+}
+
+.profile-icon-btn:hover {
+  transform: scale(1.1);
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  overflow: hidden;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-menu-item {
+  width: 100%;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: #333;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.profile-menu-item:hover {
+  background: #f5f5f5;
+}
+
+.profile-menu-item:first-child {
+  border-bottom: 1px solid #eee;
+}
