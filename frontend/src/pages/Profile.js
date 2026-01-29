@@ -73,13 +73,6 @@ export default function Profile({ onLogout }) {
             </div>
 
             <div className="profile-field">
-              <label>Role</label>
-              <div className="profile-value">
-                <span className="role-badge">{user.role}</span>
-              </div>
-            </div>
-
-            <div className="profile-field">
               <label>Member Since</label>
               <div className="profile-value">
                 {new Date(user.createdAt).toLocaleDateString()}
@@ -98,7 +91,10 @@ export default function Profile({ onLogout }) {
             </button>
           ) : (
             <div className="delete-confirm">
-              <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+              <p>
+                Are you sure you want to delete your account? This action cannot
+                be undone.
+              </p>
               <div className="delete-confirm-buttons">
                 <button
                   onClick={handleDeleteAccount}

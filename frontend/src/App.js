@@ -1,8 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useState } from "react";
 import "./App.css";
 import Login from "./components/Login";
-import Register from "./components/Register";
 import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
@@ -11,8 +9,6 @@ import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
 
 function App() {
-  const [currentView, setCurrentView] = useState("login");
-
   const isAuthenticated = !!localStorage.getItem("token");
 
   const handleLoginSuccess = () => {
@@ -28,7 +24,7 @@ function App() {
     <BrowserRouter>
       <div className="App">
         {isAuthenticated && <Navbar onLogout={handleLogout} />}
-        
+
         <Routes>
           <Route
             path="/login"
@@ -36,26 +32,8 @@ function App() {
               !isAuthenticated ? (
                 <div className="auth-container">
                   <div className="container">
-                    <h1>Authentication</h1>
-                    <div className="view-toggle">
-                      <button
-                        onClick={() => setCurrentView("login")}
-                        className={currentView === "login" ? "active" : ""}
-                      >
-                        Login
-                      </button>
-                      <button
-                        onClick={() => setCurrentView("register")}
-                        className={currentView === "register" ? "active" : ""}
-                      >
-                        Register
-                      </button>
-                    </div>
-                    {currentView === "login" ? (
-                      <Login onSuccess={handleLoginSuccess} />
-                    ) : (
-                      <Register onSuccess={() => setCurrentView("login")} />
-                    )}
+                    <h1>Sign in</h1>
+                    <Login onSuccess={handleLoginSuccess} />
                   </div>
                 </div>
               ) : (
@@ -63,11 +41,8 @@ function App() {
               )
             }
           />
-          
-          <Route
-            path="/register"
-            element={<Navigate to="/login" replace />}
-          />
+
+          <Route path="/register" element={<Navigate to="/login" replace />} />
 
           <Route
             path="/"

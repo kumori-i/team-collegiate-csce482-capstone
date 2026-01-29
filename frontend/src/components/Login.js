@@ -1,54 +1,66 @@
 // frontend/src/components/Login.js
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { loginUser } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { loginWithGoogle } from "../api";
 
 export default function Login({ onSuccess }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const googleButtonRef = useRef(null);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleGoogleCredential = async (credential) => {
     setError("");
     setLoading(true);
     try {
-      const token = await loginUser(email, password);
-      localStorage.setItem("token", token); // store JWT
+      const token = await loginWithGoogle(credential);
+      localStorage.setItem("token", token);
       if (onSuccess) onSuccess();
-      // Redirect to home page - use window.location to force full reload
       window.location.href = "/";
     } catch (err) {
-      setError(err.response?.data?.error || "Login failed");
+      setError(err.response?.data?.error || "Google login failed");
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      return;
+    }
+
+    const initGoogle = () => {
+      if (!window.google?.accounts?.id || !googleButtonRef.current) return;
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response) => handleGoogleCredential(response.credential),
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        width: "100%",
+      });
+    };
+
+    if (window.google?.accounts?.id) {
+      initGoogle();
+      return;
+    }
+
+    const script = document.querySelector(
+      'script[src="https://accounts.google.com/gsi/client"]',
+    );
+    if (script) {
+      script.addEventListener("load", initGoogle);
+      return () => script.removeEventListener("load", initGoogle);
+    }
+  }, []);
+
   return (
-    <form onSubmit={handleSubmit} className="auth-form">
+    <div className="auth-form">
       {error && <div className="error-message">{error}</div>}
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
-        required
-        disabled={loading}
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-        required
-        disabled={loading}
-      />
-      <button type="submit" disabled={loading}>
-        {loading ? "Logging in..." : "Login"}
-      </button>
-    </form>
+      <div ref={googleButtonRef} style={{ marginTop: "12px" }} />
+      {loading && <div className="auth-loading">Signing in...</div>}
+    </div>
   );
 }
