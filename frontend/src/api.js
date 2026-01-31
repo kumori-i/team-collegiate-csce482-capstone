@@ -37,6 +37,11 @@ export const deleteAccount = async () => {
   return res.data;
 };
 
+export const chatWithDataset = async (message) => {
+  const res = await axios.post(`${API_URL}/chat`, { message });
+  return res.data;
+};
+
 // Helper to get auth headers
 export const getAuthHeaders = () => {
   const token = localStorage.getItem("token");

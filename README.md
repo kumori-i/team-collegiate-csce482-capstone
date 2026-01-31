@@ -11,6 +11,7 @@ This project includes a complete authentication system with MongoDB, login, and 
 - Node.js (v14 or higher)
 - MongoDB (local or MongoDB Atlas)
 - npm or yarn
+- Ollama (for local AI chat/embeddings)
 
 ### Backend Setup
 
@@ -70,6 +71,43 @@ This project includes a complete authentication system with MongoDB, login, and 
    npm start
    ```
 
+### AI Chat (RAG) Setup
+
+The chat page uses a local RAG pipeline powered by Ollama. CSV files under `data/` are embedded into vectors and queried at runtime.
+
+1. Install and start Ollama:
+   ```bash
+   ollama serve
+   ```
+
+2. Pull the models:
+   ```bash
+   ollama pull llama3.1
+   ollama pull nomic-embed-text
+   ```
+
+3. Put your CSV files in the `data/` directory.
+   - Example file: `data/sample_basketball_stats.csv`
+
+4. Build the vector index:
+   ```bash
+   cd backend
+   npm install
+   npm run build-index
+   ```
+
+5. Start the backend and frontend as usual.
+
+Optional environment variables (backend):
+```
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1
+OLLAMA_EMBED_MODEL=nomic-embed-text
+VECTOR_INDEX_PATH=../data/vector_index.json
+ROWS_PER_CHUNK=1
+RAG_TOP_K=4
+```
+
 ### Features
 
 - **User Registration**: Create new accounts with email, password, and role (scout/coach)
@@ -86,5 +124,9 @@ This project includes a complete authentication system with MongoDB, login, and 
 - `POST /api/auth/login` - Login user
   - Body: `{ email, password }`
   - Returns: `{ token }`
+
+- `POST /api/chat` - Ask questions about CSV data
+  - Body: `{ message }`
+  - Returns: `{ reply, sources }`
 
 - `GET /health` - Health check endpoint
