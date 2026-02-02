@@ -13,6 +13,60 @@ This project includes a complete authentication system with MongoDB, login, and 
 - npm or yarn
 - Ollama (for local AI chat/embeddings)
 
+### AI Chat (RAG) Setup
+
+The chat page uses a local RAG pipeline powered by Ollama. CSV files under `data/` are embedded into vectors and queried at runtime.
+
+#### Install Ollama (by OS)
+
+- macOS (Homebrew):
+  ```bash
+  brew install ollama
+  ```
+- macOS (manual):
+  - Download and install from the Ollama website.
+- Windows:
+  - Download and install from the Ollama website.
+- Linux:
+  ```bash
+  curl -fsSL https://ollama.com/install.sh | sh
+  ```
+
+#### Start Ollama and pull models
+
+1. Start the Ollama server:
+   ```bash
+   ollama serve
+   ```
+
+2. Pull the models:
+   ```bash
+   ollama pull llama3.1
+   ollama pull nomic-embed-text
+   ```
+
+#### Prepare CSV data and build the index
+
+1. Put your CSV files in the `data/` directory.
+   - Example file: `data/sample_basketball_stats.csv`
+
+2. Build the vector index:
+   ```bash
+   cd backend
+   npm install
+   npm run build-index
+   ```
+
+Optional environment variables (backend):
+```
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1
+OLLAMA_EMBED_MODEL=nomic-embed-text
+VECTOR_INDEX_PATH=../data/vector_index.json
+ROWS_PER_CHUNK=1
+RAG_TOP_K=4
+```
+
 ### Backend Setup
 
 1. Navigate to the backend directory:
@@ -71,43 +125,13 @@ This project includes a complete authentication system with MongoDB, login, and 
    npm start
    ```
 
-### AI Chat (RAG) Setup
+### Cloudflare Deployment
 
-The chat page uses a local RAG pipeline powered by Ollama. CSV files under `data/` are embedded into vectors and queried at runtime.
-
-1. Install and start Ollama:
+1. Run the following command to deploy to Cloudflare:
    ```bash
-   ollama serve
+   cloudflared tunnel --url http://localhost:3000
    ```
-
-2. Pull the models:
-   ```bash
-   ollama pull llama3.1
-   ollama pull nomic-embed-text
-   ```
-
-3. Put your CSV files in the `data/` directory.
-   - Example file: `data/sample_basketball_stats.csv`
-
-4. Build the vector index:
-   ```bash
-   cd backend
-   npm install
-   npm run build-index
-   ```
-
-5. Start the backend and frontend as usual.
-
-Optional environment variables (backend):
-```
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1
-OLLAMA_EMBED_MODEL=nomic-embed-text
-VECTOR_INDEX_PATH=../data/vector_index.json
-ROWS_PER_CHUNK=1
-RAG_TOP_K=4
-```
-
+2. Retrieve the tunnel URL from the output and update Google Cloud Platform (GCP) settings to point to it.
 ### Features
 
 - **User Registration**: Create new accounts with email, password, and role (scout/coach)
