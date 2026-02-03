@@ -42,6 +42,16 @@ export const chatWithDataset = async (message) => {
   return res.data;
 };
 
+export const searchPlayers = async (query) => {
+  const res = await axios.get(`${API_URL}/players`, { params: { query } });
+  return res.data;
+};
+
+export const getPlayer = async (id) => {
+  const res = await axios.get(`${API_URL}/players/${encodeURIComponent(id)}`);
+  return res.data;
+};
+
 // Helper to get auth headers
 export const getAuthHeaders = () => {
   const token = localStorage.getItem("token");

@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./db.js";
 import authRoutes from "./routes/auth.js";
 import chatRoutes from "./routes/chat.js";
+import playerRoutes from "./routes/players.js";
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/players", playerRoutes);
 
 app.get("/health", (_, res) => {
   res.json({ status: "ok" });

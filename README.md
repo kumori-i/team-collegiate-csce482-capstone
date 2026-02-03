@@ -132,6 +132,7 @@ RAG_TOP_K=4
    cloudflared tunnel --url http://localhost:3000
    ```
 2. Retrieve the tunnel URL from the output and update Google Cloud Platform (GCP) settings to point to it.
+
 ### Features
 
 - **User Registration**: Create new accounts with email, password, and role (scout/coach)

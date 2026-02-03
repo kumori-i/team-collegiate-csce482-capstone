@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import Search from "./pages/Search";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
+import PlayerDetails from "./pages/PlayerDetails";
 
 function App() {
   const isAuthenticated = !!localStorage.getItem("token");
@@ -58,6 +59,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Search />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/players/:id"
+            element={
+              <ProtectedRoute>
+                <PlayerDetails />
               </ProtectedRoute>
             }
           />

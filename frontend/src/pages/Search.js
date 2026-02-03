@@ -1,19 +1,36 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { searchPlayers } from "../api";
 import "./Search.css";
 
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
-    // TODO: Implement actual search functionality
-    console.log("Searching for:", searchQuery);
-    // Placeholder results
-    setSearchResults([
-      { id: 1, name: "Player 1", type: "Player" },
-      { id: 2, name: "Coach 1", type: "Coach" },
-    ]);
+    const query = searchQuery.trim();
+    if (!query || isLoading) {
+      return;
+    }
+    setIsLoading(true);
+    setError("");
+    try {
+      const data = await searchPlayers(query);
+      setSearchResults(data.results || []);
+    } catch (err) {
+      setError("Search failed. Please try again.");
+      setSearchResults([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectPlayer = (playerId) => {
+    navigate(`/players/${encodeURIComponent(playerId)}`);
   };
 
   return (
@@ -23,13 +40,14 @@ export default function Search() {
         <form onSubmit={handleSearch} className="search-form">
           <input
             type="text"
-            placeholder="Search for players, coaches, or teams..."
+            placeholder="Search for players..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
+            disabled={isLoading}
           />
           <button type="submit" className="search-button">
-            Search
+            {isLoading ? "Searching..." : "Search"}
           </button>
         </form>
 
@@ -38,20 +56,34 @@ export default function Search() {
             <h2>Results</h2>
             <div className="results-list">
               {searchResults.map((result) => (
-                <div key={result.id} className="result-item">
-                  <h3>{result.name}</h3>
-                  <span className="result-type">{result.type}</span>
-                </div>
+                <button
+                  key={result.id}
+                  type="button"
+                  className="result-item"
+                  onClick={() => handleSelectPlayer(result.id)}
+                >
+                  <div>
+                    <h3>{result.name}</h3>
+                    {result.team ? (
+                      <p className="result-meta">{result.team}</p>
+                    ) : null}
+                  </div>
+                  <span className="result-type">
+                    {result.position || "Player"}
+                  </span>
+                </button>
               ))}
             </div>
           </div>
         )}
 
-        {searchQuery && searchResults.length === 0 && (
+        {searchQuery && searchResults.length === 0 && !isLoading && !error && (
           <div className="no-results">
             <p>No results found for "{searchQuery}"</p>
           </div>
         )}
+
+        {error ? <div className="search-error">{error}</div> : null}
       </div>
     </div>
   );
