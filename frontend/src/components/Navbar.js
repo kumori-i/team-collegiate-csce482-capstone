@@ -24,13 +24,19 @@ export default function Navbar({ user, onLogout }) {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
-          Basketball App
+          CerebroChat
         </Link>
-        
+
         <div className="navbar-links">
-          <Link to="/" className="nav-link">Home</Link>
-          <Link to="/search" className="nav-link">Search</Link>
-          <Link to="/chat" className="nav-link">Chat</Link>
+          <Link to="/" className="nav-link">
+            Home
+          </Link>
+          <Link to="/search" className="nav-link">
+            Search
+          </Link>
+          <Link to="/chat" className="nav-link">
+            Chat
+          </Link>
         </div>
 
         <div className="navbar-profile">
@@ -52,7 +58,7 @@ export default function Navbar({ user, onLogout }) {
               />
             </svg>
           </button>
-          
+
           {showProfileMenu && (
             <div className="profile-menu">
               <button onClick={handleViewProfile} className="profile-menu-item">

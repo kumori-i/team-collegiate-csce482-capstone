@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { searchPlayers } from "../api";
 import "./Search.css";
@@ -8,7 +8,48 @@ export default function Search() {
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      setError("");
+      setIsLoading(false);
+      setHasSearched(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setError("");
+
+    const timer = setTimeout(async () => {
+      try {
+        const data = await searchPlayers(query);
+        if (!cancelled) {
+          setSearchResults(data.results || []);
+          setHasSearched(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError("Search failed. Please try again.");
+          setSearchResults([]);
+          setHasSearched(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -21,9 +62,11 @@ export default function Search() {
     try {
       const data = await searchPlayers(query);
       setSearchResults(data.results || []);
+      setHasSearched(true);
     } catch (err) {
       setError("Search failed. Please try again.");
       setSearchResults([]);
+      setHasSearched(true);
     } finally {
       setIsLoading(false);
     }
@@ -44,7 +87,6 @@ export default function Search() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
-            disabled={isLoading}
           />
           <button type="submit" className="search-button">
             {isLoading ? "Searching..." : "Search"}
@@ -77,11 +119,15 @@ export default function Search() {
           </div>
         )}
 
-        {searchQuery && searchResults.length === 0 && !isLoading && !error && (
-          <div className="no-results">
-            <p>No results found for "{searchQuery}"</p>
-          </div>
-        )}
+        {searchQuery &&
+          hasSearched &&
+          searchResults.length === 0 &&
+          !isLoading &&
+          !error && (
+            <div className="no-results">
+              <p>No results found for "{searchQuery}"</p>
+            </div>
+          )}
 
         {error ? <div className="search-error">{error}</div> : null}
       </div>
