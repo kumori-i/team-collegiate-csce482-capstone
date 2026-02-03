@@ -17,7 +17,7 @@ This project includes a complete authentication system with MongoDB, login, and 
 
 The chat page uses a local RAG pipeline powered by Ollama. CSV files under `data/` are embedded into vectors and queried at runtime.
 
-#### Install Ollama (by OS)
+#### Install Ollama (by OS) (Terminal 1)
 
 - macOS (Homebrew):
   ```bash
@@ -34,18 +34,18 @@ The chat page uses a local RAG pipeline powered by Ollama. CSV files under `data
 
 #### Start Ollama and pull models
 
-1. Start the Ollama server:
-   ```bash
-   ollama serve
-   ```
-
-2. Pull the models:
+1. Pull the models:
    ```bash
    ollama pull llama3.1
    ollama pull nomic-embed-text
    ```
 
-#### Prepare CSV data and build the index
+2. Start the Ollama server:
+   ```bash
+   ollama serve
+   ```
+
+#### Prepare CSV data and build the index (Terminal 2)
 
 1. Put your CSV files in the `data/` directory.
    - Example file: `data/sample_basketball_stats.csv`
@@ -56,16 +56,6 @@ The chat page uses a local RAG pipeline powered by Ollama. CSV files under `data
    npm install
    npm run build-index
    ```
-
-Optional environment variables (backend):
-```
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1
-OLLAMA_EMBED_MODEL=nomic-embed-text
-VECTOR_INDEX_PATH=../data/vector_index.json
-ROWS_PER_CHUNK=1
-RAG_TOP_K=4
-```
 
 ### Backend Setup
 
@@ -102,7 +92,7 @@ RAG_TOP_K=4
    npm run dev
    ```
 
-### Frontend Setup
+### Frontend Setup (Terminal 3)
 
 1. Navigate to the frontend directory:
    ```bash
@@ -135,7 +125,7 @@ RAG_TOP_K=4
 
 ### Features
 
-- **User Registration**: Create new accounts with email, password, and role (scout/coach)
+- **User Registration**: Create new accounts with Google OAuth
 - **User Login**: Authenticate users and receive JWT tokens
 - **Password Security**: Passwords are hashed using bcrypt
 - **JWT Authentication**: Secure token-based authentication
