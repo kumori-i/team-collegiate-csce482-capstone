@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 import Login from "./components/Login";
@@ -11,6 +12,15 @@ import PlayerDetails from "./pages/PlayerDetails";
 
 function App() {
   const isAuthenticated = !!localStorage.getItem("token");
+  const [theme, setTheme] = useState(() => {
+    const stored = localStorage.getItem("theme");
+    return stored || "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const handleLoginSuccess = () => {
     // Navigation handled by window.location in Login component
@@ -21,10 +31,20 @@ function App() {
     window.location.href = "/login";
   };
 
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
   return (
     <BrowserRouter>
       <div className="App">
-        {isAuthenticated && <Navbar onLogout={handleLogout} />}
+        {isAuthenticated && (
+          <Navbar
+            onLogout={handleLogout}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        )}
 
         <Routes>
           <Route
@@ -33,7 +53,11 @@ function App() {
               !isAuthenticated ? (
                 <div className="auth-container">
                   <div className="container">
+                    <div className="auth-kicker">CerebroChat</div>
                     <h1>Sign in</h1>
+                    <p className="auth-subtitle">
+                      Basketball intelligence built for fast decisions.
+                    </p>
                     <Login onSuccess={handleLoginSuccess} />
                   </div>
                 </div>

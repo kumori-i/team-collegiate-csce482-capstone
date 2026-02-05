@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { chatWithDataset } from "../api";
 import "./Chat.css";
 
@@ -7,6 +7,13 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    if (endRef.current) {
+      endRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isLoading]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -55,16 +62,30 @@ export default function Chat() {
   return (
     <div className="chat-page">
       <div className="chat-container">
-        <h1>Chat</h1>
+        <div className="chat-header">
+          <div>
+            <h1>Data Chat</h1>
+            <p>Ask questions grounded in your dataset.</p>
+          </div>
+          <div className="chat-status">
+            <span className={isLoading ? "dot active" : "dot"} />
+            {isLoading ? "Thinking" : "Ready"}
+          </div>
+        </div>
 
         <div className="chat-messages">
           {messages.length === 0 ? (
             <div className="no-messages">
-              <p>No messages yet. Start a conversation!</p>
+              <p>No messages yet. Ask a question to get started.</p>
             </div>
           ) : (
             messages.map((message) => (
-              <div key={message.id} className="message">
+              <div
+                key={message.id}
+                className={`message ${
+                  message.sender === "You" ? "from-user" : "from-assistant"
+                }`}
+              >
                 <div className="message-header">
                   <span className="message-sender">{message.sender}</span>
                   <span className="message-time">{message.timestamp}</span>
@@ -86,6 +107,7 @@ export default function Chat() {
               </div>
             ))
           )}
+          <div ref={endRef} />
         </div>
 
         <form onSubmit={handleSendMessage} className="chat-input-form">

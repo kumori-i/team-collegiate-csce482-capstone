@@ -68,6 +68,12 @@ export default function Profile({ onLogout }) {
         {user && (
           <div className="profile-info">
             <div className="profile-field">
+              <label>Name</label>
+              <div className="profile-value">
+                {user.name || user.email?.split("@")[0] || "Unknown"}
+              </div>
+            </div>
+            <div className="profile-field">
               <label>Email</label>
               <div className="profile-value">{user.email}</div>
             </div>

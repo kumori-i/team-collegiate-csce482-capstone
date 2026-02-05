@@ -28,7 +28,7 @@ const authenticateToken = (req, res, next) => {
 
 // Register
 router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, name } = req.body;
 
   // Validation
   if (!email || !password) {
@@ -49,7 +49,12 @@ router.post("/register", async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({ email, passwordHash: hash });
+    const derivedName = name || email.split("@")[0];
+    const user = await User.create({
+      email,
+      passwordHash: hash,
+      name: derivedName,
+    });
     res.status(201).json({ message: "User created" });
   } catch (err) {
     console.error("Registration error:", err);
@@ -119,6 +124,9 @@ router.post("/google", async (req, res) => {
     const payload = ticket.getPayload();
     const email = payload?.email;
     const googleId = payload?.sub;
+    const displayName =
+      payload?.name ||
+      [payload?.given_name, payload?.family_name].filter(Boolean).join(" ");
 
     if (!email || !googleId) {
       return res.status(400).json({ error: "Invalid Google token payload" });
@@ -130,11 +138,15 @@ router.post("/google", async (req, res) => {
       user = await User.create({
         email,
         googleId,
+        name: displayName || email.split("@")[0],
       });
     } else if (user.googleId && user.googleId !== googleId) {
       return res.status(401).json({ error: "Google account mismatch" });
     } else if (!user.googleId) {
       user.googleId = googleId;
+      if (!user.name && displayName) {
+        user.name = displayName;
+      }
       await user.save();
     }
 
