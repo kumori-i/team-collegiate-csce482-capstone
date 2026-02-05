@@ -11,11 +11,33 @@ This project includes a complete authentication system with MongoDB, login, and 
 - Node.js (v14 or higher)
 - MongoDB (local or MongoDB Atlas)
 - npm or yarn
-- Ollama (for local AI chat/embeddings)
+- Ollama (for local AI chat/embeddings) or a Gemini API key
 
 ### AI Chat (RAG) Setup
 
-The chat page uses a local RAG pipeline powered by Ollama. CSV files under `data/` are embedded into vectors and queried at runtime.
+The chat page uses a local RAG pipeline powered by Ollama by default. If you provide a Gemini API key, the backend will use Gemini for both embeddings and chat instead.
+
+#### Option A: Use Gemini (API key file, not tracked by git)
+
+Create a `backend/.env.local` file (this is ignored by git) and add:
+
+```
+GEMINI_API_KEY=your_gemini_key_here
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+GEMINI_EMBED_MODEL=gemini-embedding-001
+RAG_STRICT=true
+LLM_TEMPERATURE=0.2
+LLM_TOP_P=0.9
+LLM_MAX_TOKENS=512
+```
+
+- If `GEMINI_API_KEY` is set, the backend will automatically use Gemini instead of Ollama.
+- `RAG_STRICT=true` enforces answers strictly from the provided data context.
+- Set `LLM_PROVIDER=ollama` to force Ollama even if a Gemini key is present.
+
+Note: If you switch embedding providers/models, rebuild the vector index so stored embeddings match the provider.
+
+#### Option B: Use Ollama (local)
 
 #### Install Ollama (by OS) (Terminal 1)
 

@@ -2,12 +2,16 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
-import authRoutes from "./routes/auth.js";
-import chatRoutes from "./routes/chat.js";
-import playerRoutes from "./routes/players.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, ".env");
+const envLocalPath = path.resolve(__dirname, ".env.local");
+dotenv.config({ path: envPath });
+dotenv.config({ path: envLocalPath, override: true });
 
 const app = express();
 
@@ -37,6 +41,10 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+const { default: authRoutes } = await import("./routes/auth.js");
+const { default: chatRoutes } = await import("./routes/chat.js");
+const { default: playerRoutes } = await import("./routes/players.js");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
