@@ -43,7 +43,9 @@ export const chatWithDataset = async (message) => {
 };
 
 export const searchPlayers = async (query) => {
-  const res = await axios.get(`${API_URL}/players`, { params: { query } });
+  const res = await axios.get(`${API_URL}/players/search`, {
+    params: { query },
+  });
   return res.data;
 };
 

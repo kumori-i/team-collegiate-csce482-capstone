@@ -9,6 +9,8 @@ export default function Search() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,7 +31,9 @@ export default function Search() {
       try {
         const data = await searchPlayers(query);
         if (!cancelled) {
-          setSearchResults(data.results || []);
+          // Backend returns { players: [...] }
+          setSearchResults(data.players || []);
+          setCurrentPage(1);
           setHasSearched(true);
         }
       } catch (err) {
@@ -61,7 +65,8 @@ export default function Search() {
     setError("");
     try {
       const data = await searchPlayers(query);
-      setSearchResults(data.results || []);
+      setSearchResults(data.players || []);
+      setCurrentPage(1);
       setHasSearched(true);
     } catch (err) {
       setError("Search failed. Please try again.");
@@ -72,8 +77,8 @@ export default function Search() {
     }
   };
 
-  const handleSelectPlayer = (playerId) => {
-    navigate(`/players/${encodeURIComponent(playerId)}`);
+  const handleSelectPlayer = (playerUniqueId) => {
+    navigate(`/players/${encodeURIComponent(playerUniqueId)}`);
   };
 
   return (
@@ -96,16 +101,25 @@ export default function Search() {
         {searchResults.length > 0 && (
           <div className="search-results">
             <h2>Results</h2>
+            <p className="results-count">
+              {searchResults.length} player
+              {searchResults.length !== 1 ? "s" : ""} found
+            </p>
             <div className="results-list">
-              {searchResults.map((result) => (
+              {searchResults
+                .slice(
+                  (currentPage - 1) * itemsPerPage,
+                  currentPage * itemsPerPage
+                )
+                .map((result) => (
                 <button
-                  key={result.id}
+                  key={result.unique_id}
                   type="button"
                   className="result-item"
-                  onClick={() => handleSelectPlayer(result.id)}
+                  onClick={() => handleSelectPlayer(result.unique_id)}
                 >
                   <div>
-                    <h3>{result.name}</h3>
+                    <h3>{result.name_split}</h3>
                     {result.team ? (
                       <p className="result-meta">{result.team}</p>
                     ) : null}
@@ -116,6 +130,45 @@ export default function Search() {
                 </button>
               ))}
             </div>
+
+            {searchResults.length > itemsPerPage && (
+              <div className="pagination">
+                <button
+                  type="button"
+                  className="page-button"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(1, prev - 1))
+                  }
+                  disabled={currentPage === 1}
+                >
+                  Prev
+                </button>
+
+                <span className="page-info">
+                  Page {currentPage} of{" "}
+                  {Math.ceil(searchResults.length / itemsPerPage)}
+                </span>
+
+                <button
+                  type="button"
+                  className="page-button"
+                  onClick={() =>
+                    setCurrentPage((prev) =>
+                      Math.min(
+                        Math.ceil(searchResults.length / itemsPerPage),
+                        prev + 1
+                      )
+                    )
+                  }
+                  disabled={
+                    currentPage ===
+                    Math.ceil(searchResults.length / itemsPerPage)
+                  }
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
 

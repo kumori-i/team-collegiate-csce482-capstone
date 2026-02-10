@@ -3,7 +3,7 @@ import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import User from "../models/User.js";
+import { supabase } from "../supabase.js";
 
 const router = express.Router();
 const getGoogleClient = () => new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -43,35 +43,42 @@ router.post("/register", async (req, res) => {
 
   try {
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
     if (existingUser) {
       return res.status(400).json({ error: "Email already registered" });
     }
 
     const hash = await bcrypt.hash(password, 10);
     const derivedName = name || email.split("@")[0];
-    const user = await User.create({
-      email,
-      passwordHash: hash,
-      name: derivedName,
-    });
+
+    const { data: user, error } = await supabase
+      .from("users")
+      .insert({
+        email,
+        password_hash: hash,
+        name: derivedName,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Registration error:", error);
+      // Handle unique constraint violations
+      if (error.code === "23505") {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+      return res.status(500).json({ error: error.message || "Registration failed" });
+    }
+
     res.status(201).json({ message: "User created" });
   } catch (err) {
     console.error("Registration error:", err);
-
-    // Handle duplicate key error (MongoDB)
-    if (err.code === 11000) {
-      return res.status(400).json({ error: "Email already registered" });
-    }
-
-    // Handle validation errors
-    if (err.name === "ValidationError") {
-      const errors = Object.values(err.errors)
-        .map((e) => e.message)
-        .join(", ");
-      return res.status(400).json({ error: errors });
-    }
-
     res.status(500).json({ error: err.message || "Registration failed" });
   }
 });
@@ -80,19 +87,26 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
 
-    if (!user.passwordHash) {
+    if (error || !user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    if (!user.password_hash) {
       return res
         .status(401)
         .json({ error: "Use Google sign-in for this account" });
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
+    const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
@@ -132,25 +146,57 @@ router.post("/google", async (req, res) => {
       return res.status(400).json({ error: "Invalid Google token payload" });
     }
 
-    let user = await User.findOne({ email });
+    // Check if user exists
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    let user = existingUser;
 
     if (!user) {
-      user = await User.create({
-        email,
-        googleId,
-        name: displayName || email.split("@")[0],
-      });
-    } else if (user.googleId && user.googleId !== googleId) {
-      return res.status(401).json({ error: "Google account mismatch" });
-    } else if (!user.googleId) {
-      user.googleId = googleId;
-      if (!user.name && displayName) {
-        user.name = displayName;
+      // Create new user
+      const { data: newUser, error } = await supabase
+        .from("users")
+        .insert({
+          email,
+          google_id: googleId,
+          name: displayName || email.split("@")[0],
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("User creation error:", error);
+        return res.status(500).json({ error: "Failed to create user" });
       }
-      await user.save();
+      user = newUser;
+    } else if (user.google_id && user.google_id !== googleId) {
+      return res.status(401).json({ error: "Google account mismatch" });
+    } else if (!user.google_id) {
+      // Update existing user with Google ID
+      const updates = { google_id: googleId };
+      if (!user.name && displayName) {
+        updates.name = displayName;
+      }
+
+      const { data: updatedUser, error } = await supabase
+        .from("users")
+        .update(updates)
+        .eq("id", user.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("User update error:", error);
+        return res.status(500).json({ error: "Failed to update user" });
+      }
+      user = updatedUser;
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
@@ -164,8 +210,13 @@ router.post("/google", async (req, res) => {
 // Get user profile
 router.get("/profile", authenticateToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-passwordHash");
-    if (!user) {
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("id, email, name, google_id, created_at")
+      .eq("id", req.user.id)
+      .single();
+
+    if (error || !user) {
       return res.status(404).json({ error: "User not found" });
     }
     res.json(user);
@@ -178,8 +229,15 @@ router.get("/profile", authenticateToken, async (req, res) => {
 router.delete("/account", authenticateToken, async (req, res) => {
   try {
     console.log("Delete account request for user:", req.user.id);
-    const user = await User.findByIdAndDelete(req.user.id);
-    if (!user) {
+
+    const { data: user, error } = await supabase
+      .from("users")
+      .delete()
+      .eq("id", req.user.id)
+      .select()
+      .single();
+
+    if (error || !user) {
       console.log("User not found for deletion:", req.user.id);
       return res.status(404).json({ error: "User not found" });
     }

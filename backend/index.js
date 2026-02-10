@@ -4,7 +4,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { connectDB } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,10 +44,12 @@ app.use(express.json());
 const { default: authRoutes } = await import("./routes/auth.js");
 const { default: chatRoutes } = await import("./routes/chat.js");
 const { default: playerRoutes } = await import("./routes/players.js");
+const { default: scoutingRoutes } = await import("./routes/scouting.js");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/players", playerRoutes);
+app.use("/api/scouting", scoutingRoutes);
 
 app.get("/health", (_, res) => {
   res.json({ status: "ok" });
@@ -56,10 +57,9 @@ app.get("/health", (_, res) => {
 
 const PORT = process.env.PORT || 5001;
 
-connectDB().then(() => {
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Backend running on port ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/health`);
-    console.log(`API endpoint: http://localhost:${PORT}/api/auth`);
-  });
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`API endpoint: http://localhost:${PORT}/api/auth`);
+  console.log("Using Supabase for database");
 });

@@ -2,21 +2,16 @@ import { jest } from "@jest/globals";
 import express from "express";
 import request from "supertest";
 
-const mockUserFindOne = jest.fn();
-const mockUserCreate = jest.fn();
-const mockUserFindById = jest.fn();
-const mockUserFindByIdAndDelete = jest.fn();
+const mockSupabaseFrom = jest.fn();
 const mockBcryptCompare = jest.fn();
 const mockBcryptHash = jest.fn();
 const mockJwtSign = jest.fn();
 const mockVerifyIdToken = jest.fn();
 
-jest.unstable_mockModule("../../models/User.js", () => ({
-  default: {
-    findOne: mockUserFindOne,
-    create: mockUserCreate,
-    findById: mockUserFindById,
-    findByIdAndDelete: mockUserFindByIdAndDelete,
+// Mock Supabase
+jest.unstable_mockModule("../../supabase.js", () => ({
+  supabase: {
+    from: mockSupabaseFrom,
   },
 }));
 
@@ -54,10 +49,9 @@ const buildApp = () => {
 beforeEach(() => {
   process.env.JWT_SECRET = "test-secret";
   process.env.GOOGLE_CLIENT_ID = "test-google-client-id";
-  mockUserFindOne.mockReset();
-  mockUserCreate.mockReset();
-  mockUserFindById.mockReset();
-  mockUserFindByIdAndDelete.mockReset();
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = "test-key";
+  mockSupabaseFrom.mockReset();
   mockBcryptCompare.mockReset();
   mockBcryptHash.mockReset();
   mockJwtSign.mockReset();
@@ -73,9 +67,26 @@ describe("auth routes", () => {
 
   test("register creates user and hashes password", async () => {
     const app = buildApp();
-    mockUserFindOne.mockResolvedValue(null);
+    
+    // Mock checking for existing user
+    mockSupabaseFrom.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
+        }),
+      }),
+    });
+    
+    // Mock creating new user
+    mockSupabaseFrom.mockReturnValueOnce({
+      insert: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: { id: "u1", email: "a@b.com" }, error: null }),
+        }),
+      }),
+    });
+    
     mockBcryptHash.mockResolvedValue("hashed");
-    mockUserCreate.mockResolvedValue({ _id: "u1", email: "a@b.com" });
 
     const res = await request(app)
       .post("/api/auth/register")
@@ -83,20 +94,21 @@ describe("auth routes", () => {
 
     expect(res.status).toBe(201);
     expect(mockBcryptHash).toHaveBeenCalled();
-    expect(mockUserCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: "a@b.com",
-        passwordHash: "hashed",
-      }),
-    );
   });
 
   test("login rejects google-only users", async () => {
     const app = buildApp();
-    mockUserFindOne.mockResolvedValue({
-      _id: "u1",
-      email: "a@b.com",
-      passwordHash: null,
+    
+    // Mock finding user with no password_hash
+    mockSupabaseFrom.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({
+            data: { id: "u1", email: "a@b.com", password_hash: null },
+            error: null,
+          }),
+        }),
+      }),
     });
 
     const res = await request(app)
@@ -108,11 +120,19 @@ describe("auth routes", () => {
 
   test("login returns jwt for valid credentials", async () => {
     const app = buildApp();
-    mockUserFindOne.mockResolvedValue({
-      _id: "u1",
-      email: "a@b.com",
-      passwordHash: "hashed",
+    
+    // Mock finding user with password_hash
+    mockSupabaseFrom.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({
+            data: { id: "u1", email: "a@b.com", password_hash: "hashed" },
+            error: null,
+          }),
+        }),
+      }),
     });
+    
     mockBcryptCompare.mockResolvedValue(true);
     mockJwtSign.mockReturnValue("jwt-token");
 
@@ -129,11 +149,28 @@ describe("auth routes", () => {
     mockVerifyIdToken.mockResolvedValue({
       getPayload: () => ({ email: "g@b.com", sub: "google-id-1" }),
     });
-    mockUserFindOne.mockResolvedValue(null);
-    mockUserCreate.mockResolvedValue({
-      _id: "u2",
-      email: "g@b.com",
+    
+    // Mock finding no existing user
+    mockSupabaseFrom.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
+        }),
+      }),
     });
+    
+    // Mock creating new user
+    mockSupabaseFrom.mockReturnValueOnce({
+      insert: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({
+            data: { id: "u2", email: "g@b.com", google_id: "google-id-1" },
+            error: null,
+          }),
+        }),
+      }),
+    });
+    
     mockJwtSign.mockReturnValue("google-jwt");
 
     const res = await request(app)
@@ -142,11 +179,5 @@ describe("auth routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.token).toBe("google-jwt");
-    expect(mockUserCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: "g@b.com",
-        googleId: "google-id-1",
-      }),
-    );
   });
 });

@@ -1,119 +1,73 @@
 import express from "express";
-import fs from "fs/promises";
-import path from "path";
-import { parse } from "csv-parse/sync";
+import { supabase } from "../supabase.js";
 
 const router = express.Router();
 
-const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "..", "data");
-const PLAYER_KEYS = ["player", "name"];
-const TEAM_KEYS = ["team"];
-const POSITION_KEYS = ["position"];
-
-let cachedPlayers = null;
-
-const normalizeKey = (key) => key.trim().toLowerCase();
-
-const getColumn = (row, keys) => {
-  const entries = Object.entries(row);
-  for (const key of keys) {
-    const match = entries.find(([k]) => normalizeKey(k) === key);
-    if (match) {
-      return match[1];
-    }
-  }
-  return "";
-};
-
-const loadPlayers = async () => {
-  if (cachedPlayers) {
-    return cachedPlayers;
-  }
-
-  const entries = await fs.readdir(DATA_DIR, { withFileTypes: true });
-  const csvFiles = entries
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".csv"))
-    .map((entry) => entry.name);
-
-  const players = [];
-
-  for (const fileName of csvFiles) {
-    const filePath = path.join(DATA_DIR, fileName);
-    const raw = await fs.readFile(filePath, "utf8");
-    const records = parse(raw, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    });
-
-    records.forEach((row, index) => {
-      const name = getColumn(row, PLAYER_KEYS);
-      if (!name) {
-        return;
-      }
-      const id = `${fileName}::${index + 1}`;
-      players.push({
-        id,
-        name,
-        team: getColumn(row, TEAM_KEYS),
-        position: getColumn(row, POSITION_KEYS),
-        stats: row,
-        source: fileName,
-        rowNumber: index + 1,
-      });
-    });
-  }
-
-  cachedPlayers = players;
-  return players;
-};
-
-router.get("/", async (req, res) => {
+// Search players - similar to my-app home page functionality
+// GET /api/players/search?query=john&limit=50
+router.get("/search", async (req, res) => {
   try {
     const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
-    if (!query) {
-      return res.json({ results: [] });
+    const limit = parseInt(req.query.limit) || 50;
+
+    let supabaseQuery = supabase
+      .from("ncaa_players_d1_male")
+      .select("unique_id, name_split, team, position, league, class")
+      .not("name_split", "is", null)
+      .neq("name_split", "");
+
+    if (query) {
+      // Search through entire database when user is searching
+      supabaseQuery = supabaseQuery.ilike("name_split", `%${query}%`);
+    } else {
+      // Only show top {limit} for initial load
+      supabaseQuery = supabaseQuery.limit(limit);
     }
 
-    const players = await loadPlayers();
-    const lowerQuery = query.toLowerCase();
-    const results = players
-      .filter((player) => player.name.toLowerCase().includes(lowerQuery))
-      .slice(0, 25)
-      .map((player) => ({
-        id: player.id,
-        name: player.name,
-        team: player.team,
-        position: player.position,
-      }));
+    const { data, error } = await supabaseQuery;
 
-    return res.json({ results });
+    if (error) {
+      console.error("Supabase error:", error);
+      return res.status(500).json({ error: "Failed to search players" });
+    }
+
+    return res.json({
+      players: data || [],
+      count: data?.length || 0,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Player search error:", err);
     return res.status(500).json({ error: "Player search failed." });
   }
 });
 
+// Get player by unique_id - similar to my-app player detail page
+// GET /api/players/:id
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const players = await loadPlayers();
-    const match = players.find((player) => player.id === id);
-    if (!match) {
-      return res.status(404).json({ error: "Player not found." });
+
+    const { data: player, error } = await supabase
+      .from("ncaa_players_d1_male")
+      .select(
+        `unique_id, name_split, team, position, league, class, 
+         pts_g, reb_g, ast_g, fg, c_3pt, ft, stl_g, blk_g, to_g, 
+         min_g, g, c_2pt, efg, ts, usg, ppp, orb_g, drb_g, pf_g, a_to`
+      )
+      .eq("unique_id", id)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return res.status(404).json({ error: "Player not found" });
+      }
+      console.error("Supabase error:", error);
+      return res.status(500).json({ error: "Failed to fetch player details" });
     }
 
-    return res.json({
-      id: match.id,
-      name: match.name,
-      team: match.team,
-      position: match.position,
-      stats: match.stats,
-      source: match.source,
-      rowNumber: match.rowNumber,
-    });
+    return res.json({ player });
   } catch (err) {
-    console.error(err);
+    console.error("Player lookup error:", err);
     return res.status(500).json({ error: "Player lookup failed." });
   }
 });
