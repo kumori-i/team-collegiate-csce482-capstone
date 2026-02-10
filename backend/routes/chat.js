@@ -11,6 +11,13 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_CHAT_MODEL = process.env.GEMINI_CHAT_MODEL || "gemini-2.5-flash";
 const GEMINI_EMBED_MODEL =
   process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001";
+const TAMU_API_KEY = process.env.TAMU_API_KEY || "";
+const TAMU_BASE_URL = process.env.TAMU_BASE_URL || "https://chat.tamu.ai";
+const TAMU_CHAT_MODELS = (process.env.TAMU_CHAT_MODELS || "gpt5.2,gpt5.1,gpt5")
+  .split(",")
+  .map((model) => model.trim())
+  .filter(Boolean);
+const TAMU_EMBED_MODEL = process.env.TAMU_EMBED_MODEL || "";
 const LLM_PROVIDER =
   process.env.LLM_PROVIDER || (GEMINI_API_KEY ? "gemini" : "ollama");
 const LLM_TEMPERATURE = process.env.LLM_TEMPERATURE
@@ -30,6 +37,14 @@ const INDEX_PATH =
 const TOP_K = Number(process.env.RAG_TOP_K || 4);
 
 let cachedIndex = null;
+
+const resolveTamuUrl = (endpoint) => {
+  const base = TAMU_BASE_URL.replace(/\/+$/, "");
+  if (base.endsWith("/v1")) {
+    return `${base}${endpoint}`;
+  }
+  return `${base}/v1${endpoint}`;
+};
 
 const loadIndex = async () => {
   if (cachedIndex) {
@@ -67,6 +82,36 @@ const embedText = async (text) => {
       data?.embedding?.values ||
       data?.embeddings?.[0]?.values ||
       data?.embeddings?.[0]?.embedding?.values;
+    if (!values?.length) {
+      throw new Error("Embedding response missing values.");
+    }
+    return values;
+  }
+
+  if (LLM_PROVIDER === "tamu") {
+    if (!TAMU_API_KEY) {
+      throw new Error("TAMU_API_KEY is required for TAMU embeddings.");
+    }
+    if (!TAMU_EMBED_MODEL) {
+      throw new Error("TAMU_EMBED_MODEL is required for TAMU embeddings.");
+    }
+    const res = await fetch(resolveTamuUrl("/embeddings"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${TAMU_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: TAMU_EMBED_MODEL,
+        input: text,
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(`Embedding failed: ${res.status} ${detail}`);
+    }
+    const data = await res.json();
+    const values = data?.data?.[0]?.embedding;
     if (!values?.length) {
       throw new Error("Embedding response missing values.");
     }
@@ -125,6 +170,50 @@ const generateAnswer = async (prompt) => {
       ?.map((part) => part.text)
       .join("");
     return text?.trim() || "";
+  }
+
+  if (LLM_PROVIDER === "tamu") {
+    if (!TAMU_API_KEY) {
+      throw new Error("TAMU_API_KEY is required for TAMU generation.");
+    }
+    const baseBody = {
+      messages: [{ role: "user", content: prompt }],
+      ...(Number.isFinite(LLM_TEMPERATURE)
+        ? { temperature: LLM_TEMPERATURE }
+        : {}),
+      ...(Number.isFinite(LLM_TOP_P) ? { top_p: LLM_TOP_P } : {}),
+      ...(Number.isFinite(LLM_MAX_TOKENS)
+        ? { max_tokens: LLM_MAX_TOKENS }
+        : {}),
+    };
+
+    let lastError = null;
+    for (const model of TAMU_CHAT_MODELS) {
+      const res = await fetch(resolveTamuUrl("/chat/completions"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TAMU_API_KEY}`,
+        },
+        body: JSON.stringify({ ...baseBody, model }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text =
+          data?.choices?.[0]?.message?.content ||
+          data?.choices?.[0]?.text ||
+          "";
+        return text.trim();
+      }
+
+      const detail = await res.text();
+      lastError = new Error(`Generate failed: ${res.status} ${detail}`);
+      if (![400, 404, 422].includes(res.status)) {
+        throw lastError;
+      }
+    }
+
+    throw lastError || new Error("Generate failed: no available TAMU models.");
   }
 
   const res = await fetch(`${OLLAMA_URL}/api/generate`, {
