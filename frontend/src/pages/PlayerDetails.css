@@ -45,6 +45,103 @@
     color: var(--muted);
 }
 
+.player-report-section {
+    margin-top: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.player-report-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.player-report-button {
+    align-self: flex-start;
+    padding: 0.6rem 1.4rem;
+    border-radius: 999px;
+    border: none;
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+.player-report-toggle {
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--muted);
+    border-radius: 999px;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.player-report-button:disabled {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.player-report {
+    padding: 1.25rem 1.5rem;
+    border-radius: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--text);
+}
+
+.player-report h3 {
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.player-report p {
+    margin: 0.35rem 0;
+}
+
+.player-report ul {
+    padding-left: 1.2rem;
+    margin: 0.25rem 0 0.5rem;
+}
+
+.player-report li {
+    margin: 0.15rem 0;
+}
+
+.player-report table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    font-size: 0.9rem;
+    table-layout: fixed;
+}
+
+.player-report th,
+.player-report td {
+    border: 1px solid var(--line);
+    padding: 0.45rem 0.6rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.player-report th {
+    background: rgba(0, 0, 0, 0.03);
+    font-weight: 700;
+}
+
 .player-section {
     margin-top: 2rem;
 }

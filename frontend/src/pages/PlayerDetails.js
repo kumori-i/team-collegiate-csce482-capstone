@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getPlayer } from "../api";
+import { getPlayer, generatePlayerReport } from "../api";
+import ReactMarkdown from "react-markdown";
 import "./PlayerDetails.css";
 
 export default function PlayerDetails() {
@@ -9,6 +10,9 @@ export default function PlayerDetails() {
   const [player, setPlayer] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [report, setReport] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+   const [isReportCollapsed, setIsReportCollapsed] = useState(false);
 
   useEffect(() => {
     const loadPlayer = async () => {
@@ -24,6 +28,21 @@ export default function PlayerDetails() {
     };
     loadPlayer();
   }, [id]);
+
+  const handleGenerateReport = async () => {
+    if (!player || isGenerating) return;
+    setIsGenerating(true);
+    setError("");
+    try {
+      const data = await generatePlayerReport(player);
+      setReport(data.description || "");
+    } catch (err) {
+      console.error("Failed to generate report", err);
+      setError("Failed to generate scouting report. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="player-page">
@@ -50,6 +69,34 @@ export default function PlayerDetails() {
               {player.league ? (
                 <div className="player-league">{player.league}</div>
               ) : null}
+            </div>
+
+            <div className="player-report-section">
+              <div className="player-report-controls">
+                <button
+                  type="button"
+                  className="player-report-button"
+                  onClick={handleGenerateReport}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? "Generating report..." : "Generate AI Scouting Report"}
+                </button>
+                {report && (
+                  <button
+                    type="button"
+                    className="player-report-toggle"
+                    onClick={() => setIsReportCollapsed((prev) => !prev)}
+                    aria-label={isReportCollapsed ? "Expand report" : "Collapse report"}
+                  >
+                    {isReportCollapsed ? "▼" : "▲"}
+                  </button>
+                )}
+              </div>
+              {report && !isReportCollapsed && (
+                <div className="player-report">
+                  <ReactMarkdown>{report}</ReactMarkdown>
+                </div>
+              )}
             </div>
 
             <div className="player-section">
