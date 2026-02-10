@@ -1,5 +1,5 @@
 // frontend/src/components/Login.js
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loginWithGoogle } from "../api";
 
 export default function Login({ onSuccess }) {
@@ -7,20 +7,23 @@ export default function Login({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const googleButtonRef = useRef(null);
 
-  const handleGoogleCredential = async (credential) => {
-    setError("");
-    setLoading(true);
-    try {
-      const token = await loginWithGoogle(credential);
-      localStorage.setItem("token", token);
-      if (onSuccess) onSuccess();
-      window.location.href = "/";
-    } catch (err) {
-      setError(err.response?.data?.error || "Google login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleGoogleCredential = useCallback(
+    async (credential) => {
+      setError("");
+      setLoading(true);
+      try {
+        const token = await loginWithGoogle(credential);
+        localStorage.setItem("token", token);
+        if (onSuccess) onSuccess();
+        window.location.href = "/";
+      } catch (err) {
+        setError(err.response?.data?.error || "Google login failed");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [onSuccess],
+  );
 
   useEffect(() => {
     const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -54,7 +57,7 @@ export default function Login({ onSuccess }) {
       script.addEventListener("load", initGoogle);
       return () => script.removeEventListener("load", initGoogle);
     }
-  }, []);
+  }, [handleGoogleCredential]);
 
   return (
     <div className="auth-form">
