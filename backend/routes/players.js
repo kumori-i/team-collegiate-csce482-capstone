@@ -3,11 +3,218 @@ import { supabase } from "../supabase.js";
 
 const router = express.Router();
 
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+const OLLAMA_GEN_MODEL = process.env.OLLAMA_MODEL || "llama3.1";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_CHAT_MODEL || "gemini-2.5-flash";
+const TAMU_API_KEY = process.env.TAMU_API_KEY || "";
+const TAMU_BASE_URL = process.env.TAMU_BASE_URL || "https://chat.tamu.ai";
+const TAMU_CHAT_MODELS = (process.env.TAMU_CHAT_MODELS || "gpt5.2,gpt5.1,gpt5")
+  .split(",")
+  .map((model) => model.trim())
+  .filter(Boolean);
+const LLM_PROVIDER =
+  process.env.LLM_PROVIDER || (GEMINI_API_KEY ? "gemini" : "ollama");
+const LLM_TEMPERATURE = process.env.LLM_TEMPERATURE
+  ? Number(process.env.LLM_TEMPERATURE)
+  : undefined;
+const LLM_TOP_P = process.env.LLM_TOP_P
+  ? Number(process.env.LLM_TOP_P)
+  : undefined;
+const LLM_MAX_TOKENS = process.env.LLM_MAX_TOKENS
+  ? Number(process.env.LLM_MAX_TOKENS)
+  : undefined;
+
+const resolveTamuUrl = (endpoint) => {
+  const base = TAMU_BASE_URL.replace(/\/+$/, "");
+  if (base.endsWith("/api")) {
+    return `${base}${endpoint}`;
+  }
+  return `${base}/api${endpoint}`;
+};
+
+const generateReport = async (prompt) => {
+  if (LLM_PROVIDER === "gemini") {
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY not configured");
+    }
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            ...(Number.isFinite(LLM_TEMPERATURE)
+              ? { temperature: LLM_TEMPERATURE }
+              : {}),
+            ...(Number.isFinite(LLM_TOP_P) ? { topP: LLM_TOP_P } : {}),
+            ...(Number.isFinite(LLM_MAX_TOKENS)
+              ? { maxOutputTokens: LLM_MAX_TOKENS }
+              : {}),
+          },
+        }),
+      },
+    );
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(`Gemini generate failed: ${res.status} ${detail}`);
+    }
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text)
+      .join("");
+    return text?.trim() || "";
+  }
+
+  if (LLM_PROVIDER === "tamu") {
+    if (!TAMU_API_KEY) {
+      throw new Error("TAMU_API_KEY not configured");
+    }
+    console.log("[players/report] TAMU request", {
+      baseUrl: TAMU_BASE_URL,
+      models: TAMU_CHAT_MODELS,
+    });
+    const parseTamuResponse = async (res) => {
+      const contentType = res.headers.get("content-type") || "";
+      console.log("[players/report] TAMU response", {
+        status: res.status,
+        contentType,
+      });
+      if (contentType.includes("text/event-stream")) {
+        const raw = await res.text();
+        console.log(
+          "[players/report] TAMU SSE raw (first 200 chars)",
+          raw.slice(0, 200),
+        );
+        const lines = raw
+          .split("\n")
+          .map((chunk) => chunk.trim())
+          .filter((chunk) => chunk.startsWith("data:"));
+        if (!lines.length) {
+          throw new Error("TAMU response missing data payload");
+        }
+        const chunks = [];
+        for (const line of lines) {
+          const payload = line.replace(/^data:\s*/, "");
+          if (payload === "[DONE]") {
+            break;
+          }
+          try {
+            const parsed = JSON.parse(payload);
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (delta) {
+              chunks.push(delta);
+            }
+          } catch (err) {
+            console.log(
+              "[players/report] TAMU SSE parse error (payload)",
+              payload.slice(0, 200),
+            );
+          }
+        }
+        if (!chunks.length) {
+          return {};
+        }
+        return {
+          choices: [{ message: { content: chunks.join("") } }],
+        };
+      }
+      const raw = await res.text();
+      if (!raw) {
+        return {};
+      }
+      try {
+        return JSON.parse(raw);
+      } catch (err) {
+        console.log(
+          "[players/report] TAMU non-JSON body (first 200 chars)",
+          raw.slice(0, 200),
+        );
+        throw err;
+      }
+    };
+    const baseBody = {
+      messages: [{ role: "user", content: prompt }],
+      stream: false,
+      ...(Number.isFinite(LLM_TEMPERATURE)
+        ? { temperature: LLM_TEMPERATURE }
+        : {}),
+      ...(Number.isFinite(LLM_TOP_P) ? { top_p: LLM_TOP_P } : {}),
+      ...(Number.isFinite(LLM_MAX_TOKENS)
+        ? { max_tokens: LLM_MAX_TOKENS }
+        : {}),
+    };
+
+    let lastError = null;
+    for (const model of TAMU_CHAT_MODELS) {
+      const res = await fetch(resolveTamuUrl("/chat/completions"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TAMU_API_KEY}`,
+        },
+        body: JSON.stringify({ ...baseBody, model }),
+      });
+      if (res.ok) {
+        const data = await parseTamuResponse(res);
+        const text =
+          data?.choices?.[0]?.message?.content ||
+          data?.choices?.[0]?.text ||
+          "";
+        return text.trim();
+      }
+
+      const detail = await res.text();
+      console.log(
+        "[players/report] TAMU non-OK body (first 200 chars)",
+        detail.slice(0, 200),
+      );
+      lastError = new Error(`TAMU generate failed: ${res.status} ${detail}`);
+      if (![400, 404, 422].includes(res.status)) {
+        throw lastError;
+      }
+    }
+
+    throw lastError || new Error("TAMU generate failed: no available models");
+  }
+
+  const res = await fetch(`${OLLAMA_URL}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: OLLAMA_GEN_MODEL,
+      prompt,
+      stream: false,
+      options: {
+        ...(Number.isFinite(LLM_TEMPERATURE)
+          ? { temperature: LLM_TEMPERATURE }
+          : {}),
+        ...(Number.isFinite(LLM_TOP_P) ? { top_p: LLM_TOP_P } : {}),
+        ...(Number.isFinite(LLM_MAX_TOKENS)
+          ? { num_predict: LLM_MAX_TOKENS }
+          : {}),
+      },
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Ollama generate failed: ${res.status} ${detail}`);
+  }
+  const data = await res.json();
+  return data.response?.trim() || "";
+};
+
 // Search players - similar to my-app home page functionality
 // GET /api/players/search?query=john&limit=50
 router.get("/search", async (req, res) => {
   try {
-    const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
+    const query =
+      typeof req.query.query === "string" ? req.query.query.trim() : "";
     const limit = parseInt(req.query.limit) || 50;
 
     let supabaseQuery = supabase
@@ -50,10 +257,10 @@ router.get("/:id", async (req, res) => {
     const { data: player, error } = await supabase
       .from("ncaa_players_d1_male")
       .select(
-        `unique_id, name_split, team, position, league, class, 
-         pts_g, reb_g, ast_g, fg, c_3pt, ft, stl_g, blk_g, to_g, 
+        `unique_id, name_split, team, position, league, class,
+         pts_g, reb_g, ast_g, fg, c_3pt, ft, stl_g, blk_g, to_g,
          min_g, g, c_2pt, efg, ts, usg, ppp, orb_g, drb_g, pf_g, a_to,
-         ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40`
+         ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40`,
       )
       .eq("unique_id", id)
       .single();
@@ -111,18 +318,10 @@ router.post("/report", async (req, res) => {
       return res.status(400).json({ error: "Missing required player fields." });
     }
 
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const GEMINI_CHAT_MODEL =
-      process.env.GEMINI_CHAT_MODEL || "gemini-2.5-flash";
-
-    if (!GEMINI_API_KEY) {
-      return res
-        .status(500)
-        .json({ error: "GEMINI_API_KEY is not configured on the server." });
-    }
-
     const usagePct =
-      usg != null ? `${Number(usg).toFixed(1)}% (approximate usage rate)` : "N/A";
+      usg != null
+        ? `${Number(usg).toFixed(1)}% (approximate usage rate)`
+        : "N/A";
     const efgPct = efg ? `${(Number(efg) * 100).toFixed(1)}%` : "N/A";
     const tsPct = ts ? `${(Number(ts) * 100).toFixed(1)}%` : "N/A";
     const fgPct = fg ? `${(Number(fg) * 100).toFixed(1)}%` : "N/A";
@@ -211,7 +410,7 @@ Present the "winning basketball" traits as a compact bullet list, using this exa
 - **TS%**: ${tsPct} – overall scoring efficiency context
 - **A/TO**: ${aToRatio} – how well they value the ball
 - **TO Diff (Steals − TOs)**: ${toDiff} – possession battle impact
-- **ORB/40**: ${orbPer40 !== "N/A" ? orbPer40 : orb_40 ?? "N/A"} – effort/motor and extra possessions
+- **ORB/40**: ${orbPer40 !== "N/A" ? orbPer40 : (orb_40 ?? "N/A")} – effort/motor and extra possessions
 
 Follow the bullets with 2–3 sentences explaining:
 - Who values the ball (low turnovers, strong A/TO, positive TO Diff).
@@ -246,31 +445,7 @@ VERY IMPORTANT:
 - Strengths and weaknesses must be described explicitly in terms of the winning habits metrics (eFG%, TS%, A/TO, TO Diff, ORB/40) and the skill metrics (PSP, 3PE, FGS, ATR, DSI).
 `;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CHAT_MODEL}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": GEMINI_API_KEY,
-        },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const detail = await response.text();
-      console.error("Gemini generate error:", detail);
-      return res.status(500).json({ error: "Failed to generate description" });
-    }
-
-    const data = await response.json();
-    const description =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text)
-        .join("")?.trim() || "";
+    const description = await generateReport(prompt);
 
     if (!description) {
       return res

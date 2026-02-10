@@ -29,6 +29,7 @@ const LLM_TOP_P = process.env.LLM_TOP_P
 const LLM_MAX_TOKENS = process.env.LLM_MAX_TOKENS
   ? Number(process.env.LLM_MAX_TOKENS)
   : undefined;
+const RAG_ENABLED = process.env.RAG_ENABLED === "true";
 const RAG_STRICT = process.env.RAG_STRICT !== "false";
 const DATA_DIR =
   process.env.DATA_DIR || path.resolve(process.cwd(), "..", "data");
@@ -40,10 +41,10 @@ let cachedIndex = null;
 
 const resolveTamuUrl = (endpoint) => {
   const base = TAMU_BASE_URL.replace(/\/+$/, "");
-  if (base.endsWith("/v1")) {
+  if (base.endsWith("/api")) {
     return `${base}${endpoint}`;
   }
-  return `${base}/v1${endpoint}`;
+  return `${base}/api${endpoint}`;
 };
 
 const loadIndex = async () => {
@@ -176,8 +177,45 @@ const generateAnswer = async (prompt) => {
     if (!TAMU_API_KEY) {
       throw new Error("TAMU_API_KEY is required for TAMU generation.");
     }
+    const parseTamuResponse = async (res) => {
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("text/event-stream")) {
+        const raw = await res.text();
+        const lines = raw
+          .split("\n")
+          .map((chunk) => chunk.trim())
+          .filter((chunk) => chunk.startsWith("data:"));
+        if (!lines.length) {
+          throw new Error("TAMU response missing data payload");
+        }
+        const chunks = [];
+        for (const line of lines) {
+          const payload = line.replace(/^data:\s*/, "");
+          if (payload === "[DONE]") {
+            break;
+          }
+          try {
+            const parsed = JSON.parse(payload);
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (delta) {
+              chunks.push(delta);
+            }
+          } catch {
+            // ignore malformed payloads
+          }
+        }
+        if (!chunks.length) {
+          return {};
+        }
+        return {
+          choices: [{ message: { content: chunks.join("") } }],
+        };
+      }
+      return res.json();
+    };
     const baseBody = {
       messages: [{ role: "user", content: prompt }],
+      stream: false,
       ...(Number.isFinite(LLM_TEMPERATURE)
         ? { temperature: LLM_TEMPERATURE }
         : {}),
@@ -198,7 +236,7 @@ const generateAnswer = async (prompt) => {
         body: JSON.stringify({ ...baseBody, model }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await parseTamuResponse(res);
         const text =
           data?.choices?.[0]?.message?.content ||
           data?.choices?.[0]?.text ||
@@ -265,46 +303,52 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const index = await loadIndex();
-    if (!index?.items?.length) {
-      return res.status(500).json({ error: "Vector index is empty." });
+    let prompt = message;
+    let sources = [];
+
+    if (RAG_ENABLED) {
+      const index = await loadIndex();
+      if (!index?.items?.length) {
+        return res.status(500).json({ error: "Vector index is empty." });
+      }
+
+      const queryEmbedding = await embedText(message);
+      const scored = index.items.map((item) => ({
+        item,
+        score: cosineSimilarity(queryEmbedding, item.embedding),
+      }));
+
+      scored.sort((a, b) => b.score - a.score);
+      const topMatches = scored.slice(0, TOP_K).map((entry) => entry.item);
+
+      const context = topMatches.map((match) => match.text).join("\n\n---\n\n");
+      const instructions = RAG_STRICT
+        ? [
+            "You are a helpful assistant answering questions using only the provided context.",
+            "Do not use outside knowledge. If the answer is not in the context, say you don't know.",
+            "You may analyze the user's request to explain what is being asked, but all factual claims must come from the context.",
+          ]
+        : [
+            "You are a helpful assistant answering questions using the provided context.",
+            "Prefer the context, but you may answer from general knowledge if needed.",
+          ];
+
+      prompt = [
+        ...instructions,
+        "",
+        `Context:\n${context}`,
+        "",
+        `Question: ${message}`,
+        "Answer:",
+      ].join("\n");
+      sources = topMatches.map((match) => match.meta);
     }
-
-    const queryEmbedding = await embedText(message);
-    const scored = index.items.map((item) => ({
-      item,
-      score: cosineSimilarity(queryEmbedding, item.embedding),
-    }));
-
-    scored.sort((a, b) => b.score - a.score);
-    const topMatches = scored.slice(0, TOP_K).map((entry) => entry.item);
-
-    const context = topMatches.map((match) => match.text).join("\n\n---\n\n");
-    const instructions = RAG_STRICT
-      ? [
-          "You are a helpful assistant answering questions using only the provided context.",
-          "Do not use outside knowledge. If the answer is not in the context, say you don't know.",
-          "You may analyze the user's request to explain what is being asked, but all factual claims must come from the context.",
-        ]
-      : [
-          "You are a helpful assistant answering questions using the provided context.",
-          "Prefer the context, but you may answer from general knowledge if needed.",
-        ];
-
-    const prompt = [
-      ...instructions,
-      "",
-      `Context:\n${context}`,
-      "",
-      `Question: ${message}`,
-      "Answer:",
-    ].join("\n");
 
     const reply = await generateAnswer(prompt);
 
     return res.json({
       reply,
-      sources: topMatches.map((match) => match.meta),
+      sources,
     });
   } catch (err) {
     console.error(err);
