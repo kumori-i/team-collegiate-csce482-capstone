@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getPlayer, generatePlayerReport } from "../api";
+import { getPlayer, generatePlayerReport, searchPlayers } from "../api";
 import ReactMarkdown from "react-markdown";
+import PlayerCharts from "../components/PlayerCharts";
 import "./PlayerDetails.css";
 
 export default function PlayerDetails() {
@@ -12,7 +13,12 @@ export default function PlayerDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [report, setReport] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-   const [isReportCollapsed, setIsReportCollapsed] = useState(false);
+  const [isReportCollapsed, setIsReportCollapsed] = useState(false);
+  const [comparisonPlayer, setComparisonPlayer] = useState(null);
+  const [compareQuery, setCompareQuery] = useState("");
+  const [compareResults, setCompareResults] = useState([]);
+  const [isCompareLoading, setIsCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState("");
 
   useEffect(() => {
     const loadPlayer = async () => {
@@ -28,6 +34,41 @@ export default function PlayerDetails() {
     };
     loadPlayer();
   }, [id]);
+
+  const handleCompareSearch = async (event) => {
+    event.preventDefault();
+    const query = compareQuery.trim();
+    if (!query || isCompareLoading) return;
+
+    setIsCompareLoading(true);
+    setCompareError("");
+    setCompareResults([]);
+
+    try {
+      const data = await searchPlayers(query);
+      setCompareResults(
+        (data.players || []).filter(
+          (p) => p.unique_id !== (player && player.unique_id),
+        ),
+      );
+    } catch (err) {
+      setCompareError("Comparison search failed. Please try again.");
+      setCompareResults([]);
+    } finally {
+      setIsCompareLoading(false);
+    }
+  };
+
+  const handleSelectComparison = async (playerId) => {
+    try {
+      const data = await getPlayer(playerId);
+      setComparisonPlayer(data.player || null);
+      setCompareError("");
+    } catch (err) {
+      setCompareError("Unable to load comparison player.");
+      setComparisonPlayer(null);
+    }
+  };
 
   const handleGenerateReport = async () => {
     if (!player || isGenerating) return;
@@ -105,6 +146,83 @@ export default function PlayerDetails() {
                 <StatCard label="Points Per Game" value={player.pts_g} />
                 <StatCard label="Rebounds Per Game" value={player.reb_g} />
                 <StatCard label="Assists Per Game" value={player.ast_g} />
+              </div>
+            </div>
+
+            <div className="player-section">
+              <h3 className="player-section-subtitle">Visual Profile</h3>
+              <PlayerCharts player={player} comparisonPlayer={comparisonPlayer} />
+
+              <div className="player-compare-section">
+                <div className="player-compare-header">
+                  <h4>Compare with another player</h4>
+                  {comparisonPlayer ? (
+                    <span className="player-compare-selected">
+                      Comparing to {comparisonPlayer.name_split}
+                      {comparisonPlayer.team
+                        ? ` • ${comparisonPlayer.team}`
+                        : ""}
+                    </span>
+                  ) : (
+                    <span className="player-compare-selected player-compare-selected--muted">
+                      Select a player to see side-by-side charts
+                    </span>
+                  )}
+                </div>
+
+                <form
+                  className="player-compare-form"
+                  onSubmit={handleCompareSearch}
+                >
+                  <input
+                    type="text"
+                    className="player-compare-input"
+                    placeholder="Search by name (e.g., Smith, Johnson)..."
+                    value={compareQuery}
+                    onChange={(e) => setCompareQuery(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="player-compare-button"
+                    disabled={isCompareLoading || !compareQuery.trim()}
+                  >
+                    {isCompareLoading ? "Searching..." : "Search"}
+                  </button>
+                </form>
+
+                {compareError ? (
+                  <div className="player-compare-error">{compareError}</div>
+                ) : null}
+
+                {compareResults.length > 0 && (
+                  <div className="player-compare-results">
+                    {compareResults.slice(0, 5).map((candidate) => (
+                      <button
+                        key={candidate.unique_id}
+                        type="button"
+                        className="player-compare-result"
+                        onClick={() =>
+                          handleSelectComparison(candidate.unique_id)
+                        }
+                      >
+                        <div className="player-compare-result-main">
+                          <span className="player-compare-name">
+                            {candidate.name_split}
+                          </span>
+                          <span className="player-compare-meta">
+                            {candidate.team || "Unknown team"}
+                            {candidate.position
+                              ? ` • ${candidate.position}`
+                              : ""}
+                          </span>
+                        </div>
+                        <span className="player-compare-action">
+                          Use for comparison
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

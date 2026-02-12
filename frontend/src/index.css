@@ -12,6 +12,9 @@
     --accent: #f47a20;
     --accent-2: #1a2a3f;
     --accent-3: #f2b347;
+    /* Chart-specific colors */
+    --chart-primary: #f47a20;
+    --chart-compare: #1a2a3f;
     --line: #e7d7c4;
     --shadow: 0 22px 60px rgba(17, 24, 39, 0.12);
     --shadow-soft: 0 10px 30px rgba(17, 24, 39, 0.1);
@@ -29,6 +32,9 @@
     --accent: #f6862b;
     --accent-2: #f0c36d;
     --accent-3: #2c88ff;
+    /* Chart-specific colors (preserve navy-ish hue, lighter for dark bg) */
+    --chart-primary: #f6862b;
+    --chart-compare: #64748b;
     --line: #2a3442;
     --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
     --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
