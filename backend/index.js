@@ -45,11 +45,13 @@ const { default: authRoutes } = await import("./routes/auth.js");
 const { default: chatRoutes } = await import("./routes/chat.js");
 const { default: playerRoutes } = await import("./routes/players.js");
 const { default: scoutingRoutes } = await import("./routes/scouting.js");
+const { default: agentRoutes } = await import("./routes/agent.js");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/api/scouting", scoutingRoutes);
+app.use("/api/agent", agentRoutes);
 
 app.get("/health", (_, res) => {
   res.json({ status: "ok" });

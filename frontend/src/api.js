@@ -38,7 +38,7 @@ export const deleteAccount = async () => {
 };
 
 export const chatWithDataset = async (message) => {
-  const res = await axios.post(`${API_URL}/chat`, { message });
+  const res = await axios.post(`${API_URL}/agent/chat`, { message });
   return res.data;
 };
 
@@ -55,36 +55,14 @@ export const getPlayer = async (id) => {
 };
 
 export const generatePlayerReport = async (player) => {
-  const res = await axios.post(`${API_URL}/players/report`, {
-    name: player.name_split,
-    team: player.team,
-    position: player.position,
-    class: player.class,
-    pts_g: player.pts_g,
-    reb_g: player.reb_g,
-    ast_g: player.ast_g,
-    fg: player.fg,
-    c_3pt: player.c_3pt,
-    ft: player.ft,
-    stl_g: player.stl_g,
-    blk_g: player.blk_g,
-    to_g: player.to_g,
-    min_g: player.min_g,
-    efg: player.efg,
-    ts: player.ts,
-    usg: player.usg,
-    a_to: player.a_to,
-    orb_g: player.orb_g,
-    ram: player.ram,
-    c_ram: player.c_ram,
-    psp: player.psp,
-    c_3pe: player.c_3pe,
-    dsi: player.dsi,
-    fgs: player.fgs,
-    bms: player.bms,
-    orb_40: player.orb_40,
+  const prompt = `Generate a scouting report for ${player.name_split} (${player.position}) on ${player.team}. Focus on role, strengths, weaknesses, and projection.`;
+  const res = await axios.post(`${API_URL}/agent/report`, {
+    message: prompt,
+    player,
   });
-  return res.data;
+  return {
+    description: res.data?.report || "",
+  };
 };
 
 // Helper to get auth headers
