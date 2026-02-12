@@ -19,7 +19,7 @@ Implemented comprehensive player search functionality similar to my-app:
 - ✅ Case-insensitive search
 - ✅ Configurable result limits
 - ✅ Full player statistics
-- ✅ AI-powered scouting reports using Gemini
+- ✅ AI-powered scouting reports using configurable providers (`LLM_PROVIDER`)
 
 ---
 
@@ -134,7 +134,7 @@ See `API_DOCUMENTATION.md` for:
 // Instead of: supabase.from('ncaa_players_d1_male').select()
 // Use: fetch('http://localhost:5001/api/players/search')
 
-// Instead of: direct Gemini API call
+// Instead of: direct provider API call from frontend
 // Use: fetch('http://localhost:5001/api/scouting/generate')
 ```
 
@@ -170,8 +170,8 @@ npm test
 - Check that the `unique_id` column exists
 
 ### Issue: "Failed to generate scouting report"
-- Verify `GEMINI_API_KEY` is set in `.env`
-- Check that your Gemini API quota hasn't been exceeded
+- Verify provider-specific keys are set in `.env` (for example `TAMU_API_KEY` when `LLM_PROVIDER=tamu`)
+- Check that your selected model in `TAMU_CHAT_MODELS` (or provider equivalent) is available
 
 ### Issue: CORS errors from frontend
 - The backend allows all origins in development mode

@@ -1,15 +1,16 @@
 .search-page {
     min-height: calc(100vh - var(--nav-height));
-    padding: 2.5rem clamp(1.5rem, 3vw, 3rem);
+    padding: 1.5rem clamp(1rem, 2.5vw, 2rem) 2.5rem;
     background: transparent;
 }
 
 .search-container {
-    max-width: 800px;
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
     background: var(--surface);
     border-radius: var(--radius);
-    padding: 2rem;
+    padding: clamp(1.25rem, 2vw, 2rem);
     box-shadow: var(--shadow);
     border: 1px solid var(--line);
 }
@@ -47,18 +48,18 @@
 
 .search-button {
     padding: 12px 24px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    background: var(--accent);
     color: #1b1b1b;
     border: none;
     border-radius: 999px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.3s;
+    transition: filter 0.2s;
 }
 
 .search-button:hover {
-    background: linear-gradient(135deg, #e86e12, #f6bf5e);
+    filter: brightness(0.96);
 }
 
 .search-results h2 {

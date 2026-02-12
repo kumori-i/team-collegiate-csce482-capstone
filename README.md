@@ -2,168 +2,80 @@
 
 TEAM: Ethan Rendell, Harrison Ko, Joshua George, Robert Stacks
 
-## Authentication System Setup
+## Stack Overview
 
-This project includes a complete authentication system with MongoDB, login, and registration functionality.
+- Frontend: React (`frontend/`)
+- Backend: Express + Supabase (`backend/`)
+- Auth: JWT + Google OAuth
+- AI: Provider-driven generation via `LLM_PROVIDER` (`tamu`, `gemini`, or `ollama`)
 
-### Prerequisites
+## Current AI Architecture
 
-- Node.js (v14 or higher)
-- MongoDB (local or MongoDB Atlas)
-- npm or yarn
-- Ollama (for local AI chat/embeddings) or a Gemini API key
+The project no longer uses RAG/vector indexing. AI routes call the configured LLM provider directly and rely on runtime data/agent logic instead of embeddings.
 
-### AI Chat (RAG) Setup
+## Backend Setup
 
-The chat page uses a local RAG pipeline powered by Ollama by default. If you provide a Gemini API key, the backend will use Gemini for both embeddings and chat instead.
-
-#### Option A: Use Gemini (API key file, not tracked by git)
-
-Create a `backend/.env.local` file (this is ignored by git) and add:
-
-```
-GEMINI_API_KEY=your_gemini_key_here
-GEMINI_CHAT_MODEL=gemini-2.5-flash
-GEMINI_EMBED_MODEL=gemini-embedding-001
-RAG_STRICT=true
-LLM_TEMPERATURE=0.2
-LLM_TOP_P=0.9
-LLM_MAX_TOKENS=512
+1. Go to backend:
+```bash
+cd backend
 ```
 
-- If `GEMINI_API_KEY` is set, the backend will automatically use Gemini instead of Ollama.
-- `RAG_STRICT=true` enforces answers strictly from the provided data context.
-- Set `LLM_PROVIDER=ollama` to force Ollama even if a Gemini key is present.
+2. Install dependencies:
+```bash
+npm install
+```
 
-Note: If you switch embedding providers/models, rebuild the vector index so stored embeddings match the provider.
+3. Configure `backend/.env`:
+```env
+PORT=5001
+JWT_SECRET=your_random_secret
 
-#### Option B: Use Ollama (local)
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_key
 
-#### Install Ollama (by OS) (Terminal 1)
+LLM_PROVIDER=tamu
+TAMU_API_KEY=your_tamu_key
+TAMU_BASE_URL=https://chat-api.tamu.ai
+TAMU_CHAT_MODELS=protected.gpt-4o,protected.gpt-4.1,protected.o3-mini
+```
 
-- macOS (Homebrew):
-  ```bash
-  brew install ollama
-  ```
-- macOS (manual):
-  - Download and install from the Ollama website.
-- Windows:
-  - Download and install from the Ollama website.
-- Linux:
-  ```bash
-  curl -fsSL https://ollama.com/install.sh | sh
-  ```
+4. Run backend:
+```bash
+npm run dev
+```
 
-#### Start Ollama and pull models
+## Frontend Setup
 
-1. Pull the models:
-   ```bash
-   ollama pull llama3.1
-   ollama pull nomic-embed-text
-   ```
-
-2. Start the Ollama server:
-   ```bash
-   ollama serve
-   ```
-
-#### Prepare CSV data and build the index (Terminal 2)
-
-1. Put your CSV files in the `data/` directory.
-   - Example file: `data/sample_basketball_stats.csv`
-
-2. Build the vector index:
-   ```bash
-   cd backend
-   npm install
-   npm run build-index
-   ```
-
-### Backend Setup
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
+1. Go to frontend:
+```bash
+cd frontend
+```
 
 2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
-3. Create a `.env` file in the `backend` directory with the following variables:
-   ```
-   MONGO_URI=your_mongodb_connection_string_here
-   JWT_SECRET=your_jwt_secret_key_here
-   PORT=5001
-   ```
+3. Optional env:
+```env
+REACT_APP_API_URL=http://localhost:5001/api
+```
 
-   - **MONGO_URI**: Your MongoDB connection string (e.g., `mongodb://localhost:27017/your-database-name` or MongoDB Atlas connection string)
-   - **JWT_SECRET**: A random secret key for signing JWT tokens (you can generate one using: `openssl rand -base64 32`)
-   - **PORT**: Server port (optional, defaults to 5001)
-   
-   **Note**: Port 5000 is commonly used by Apple's AirPlay service on macOS. If you encounter connection issues, use port 5001 or another available port.
+4. Run frontend:
+```bash
+npm start
+```
 
-4. Start the backend server:
-   ```bash
-   npm start
-   ```
+## API Endpoints
 
-   Or for development with auto-reload:
-   ```bash
-   npm run dev
-   ```
-
-### Frontend Setup (Terminal 3)
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. (Optional) Create a `.env` file in the `frontend` directory:
-   ```
-   REACT_APP_API_URL=http://localhost:5001/api
-   ```
-   Note: If not set, it defaults to `http://localhost:5001/api`
-
-4. Start the frontend development server:
-   ```bash
-   npm start
-   ```
-
-### Cloudflare Deployment
-
-1. Run the following command to deploy to Cloudflare:
-   ```bash
-   cloudflared tunnel --url http://localhost:3000
-   ```
-2. Retrieve the tunnel URL from the output and update Google Cloud Platform (GCP) settings to point to it.
-
-### Features
-
-- **User Registration**: Create new accounts with Google OAuth
-- **User Login**: Authenticate users and receive JWT tokens
-- **Password Security**: Passwords are hashed using bcrypt
-- **JWT Authentication**: Secure token-based authentication
-- **Modern UI**: Clean, responsive design with form validation
-
-### API Endpoints
-
-- `POST /api/auth/register` - Register a new user
-  - Body: `{ email, password, role }`
-  
-- `POST /api/auth/login` - Login user
-  - Body: `{ email, password }`
-  - Returns: `{ token }`
-
-- `POST /api/chat` - Ask questions about CSV data
-  - Body: `{ message }`
-  - Returns: `{ reply, sources }`
-
-- `GET /health` - Health check endpoint
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/google`
+- `GET /api/auth/profile`
+- `DELETE /api/auth/account`
+- `GET /api/players/search`
+- `GET /api/players/:id`
+- `POST /api/players/report`
+- `POST /api/scouting/generate`
+- `POST /api/chat`
+- `GET /health`

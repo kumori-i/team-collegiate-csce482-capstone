@@ -8,38 +8,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background:
-        radial-gradient(
-            circle at 20% 20%,
-            rgba(244, 122, 32, 0.25),
-            transparent 40%
-        ),
-        radial-gradient(
-            circle at 80% 10%,
-            rgba(26, 42, 63, 0.3),
-            transparent 45%
-        ),
-        linear-gradient(
-            135deg,
-            rgba(255, 238, 216, 0.7),
-            rgba(244, 122, 32, 0.1)
-        );
+    background: #f4eee5;
     padding: 20px;
 }
 
 [data-theme="dark"] .auth-container {
-    background:
-        radial-gradient(
-            circle at 15% 20%,
-            rgba(244, 122, 32, 0.12),
-            transparent 55%
-        ),
-        radial-gradient(
-            circle at 80% 10%,
-            rgba(90, 120, 160, 0.08),
-            transparent 60%
-        ),
-        linear-gradient(135deg, rgba(12, 17, 23, 0.9), rgba(18, 24, 32, 0.95));
+    background: #121821;
 }
 
 .container {
@@ -107,19 +81,19 @@
 
 .auth-form button {
     padding: 12px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    background: var(--accent);
     color: white;
     border: none;
     border-radius: 10px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.3s;
+    transition: filter 0.2s;
     margin-top: 10px;
 }
 
 .auth-form button:hover:not(:disabled) {
-    background: linear-gradient(135deg, #e86e12, #f6bf5e);
+    filter: brightness(0.95);
 }
 
 .auth-form button:disabled {

@@ -1,15 +1,16 @@
 .player-page {
     min-height: calc(100vh - var(--nav-height));
-    padding: 2.5rem clamp(1.5rem, 3vw, 3rem);
+    padding: 1.5rem clamp(1rem, 2.5vw, 2rem) 2.5rem;
     background: transparent;
 }
 
 .player-container {
-    max-width: 900px;
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
     background: var(--surface);
     border-radius: var(--radius);
-    padding: 2rem;
+    padding: clamp(1.25rem, 2vw, 2rem);
     box-shadow: var(--shadow);
     border: 1px solid var(--line);
 }
@@ -164,21 +165,21 @@
 
 .player-primary-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
 }
 
 .player-stats-grid {
     margin-top: 0.75rem;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
 }
 
 .player-charts-grid {
     margin-top: 0.75rem;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 1.25rem;
 }
 
@@ -204,6 +205,33 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--muted);
+}
+
+.player-chart-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.player-chart-action-button {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.player-chart-action-button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .player-chart-body {

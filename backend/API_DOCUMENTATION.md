@@ -136,7 +136,7 @@ const loadPlayerDetails = async (playerId) => {
 ## 🏀 AI Scouting Report Endpoint
 
 ### 3. Generate AI Scouting Report
-Generate an AI-powered scouting report for a player using Gemini AI.
+Generate an AI-powered scouting report for a player using the configured provider from `.env` (`LLM_PROVIDER`).
 
 **Endpoint:** `POST /api/scouting/generate`
 

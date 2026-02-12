@@ -7,7 +7,6 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "hash-password": "node scripts/hashPassword.js",
-    "build-index": "node scripts/buildVectorIndex.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],
@@ -18,7 +17,6 @@
     "@supabase/supabase-js": "^2.95.3",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
-    "csv-parse": "^5.6.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "google-auth-library": "^9.14.1",

@@ -47,19 +47,7 @@
 body {
     margin: 0;
     font-family: var(--font-body);
-    background:
-        radial-gradient(
-            circle at 20% 20%,
-            rgba(244, 122, 32, 0.2),
-            transparent 45%
-        ),
-        radial-gradient(
-            circle at 80% 0%,
-            rgba(26, 42, 63, 0.2),
-            transparent 40%
-        ),
-        linear-gradient(120deg, rgba(255, 245, 232, 0.6), transparent 55%),
-        var(--bg);
+    background: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -69,19 +57,7 @@ body {
 }
 
 [data-theme="dark"] body {
-    background:
-        radial-gradient(
-            circle at 20% 20%,
-            rgba(244, 122, 32, 0.12),
-            transparent 50%
-        ),
-        radial-gradient(
-            circle at 80% 10%,
-            rgba(90, 120, 160, 0.08),
-            transparent 55%
-        ),
-        linear-gradient(135deg, rgba(15, 20, 28, 0.7), rgba(12, 17, 23, 0.9)),
-        var(--bg);
+    background: var(--bg);
 }
 
 code {

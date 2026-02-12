@@ -2,7 +2,7 @@
 
 ## Your Backend is Ready!
 
-The backend has been migrated from MongoDB to Supabase and now includes player search functionality similar to my-app.
+The backend now uses Supabase for player/user data and provider-based LLM calls for chat/report generation.
 
 ---
 
@@ -76,10 +76,12 @@ Make sure these variables are set:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://eofnuhzxwbfdylhwysqc.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sb_publishable_QldAzENSZzOcqCJzulDPhA_Id-piaqm
-GEMINI_API_KEY=AIzaSyAVXhQLv4qSh4pL8SGizNyvHpS5gFoiduc
-GEMINI_CHAT_MODEL=gemini-2.5-flash
+LLM_PROVIDER=tamu
+TAMU_API_KEY=your_api_key
+TAMU_BASE_URL=https://chat-api.tamu.ai
+TAMU_CHAT_MODELS=protected.gpt-4o,protected.gpt-4.1,protected.o3-mini
 ```
-*(These are already in your .env)*
+Use `LLM_PROVIDER=gemini` or `LLM_PROVIDER=ollama` if you want a different model provider.
 
 ### ✅ Step 3: Start Backend
 ```bash
