@@ -120,10 +120,14 @@ app.get("/health", (_, res) => {
 
 const PORT = process.env.PORT || 5001;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Backend running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`API endpoint: http://localhost:${PORT}/api/auth`);
-  console.log(`Swagger docs: http://localhost:${PORT}/api/docs`);
-  console.log("Using Supabase for database");
-});
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Backend running on port ${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/health`);
+    console.log(`API endpoint: http://localhost:${PORT}/api/auth`);
+    console.log(`Swagger docs: http://localhost:${PORT}/api/docs`);
+    console.log("Using Supabase for database");
+  });
+}
+
+export default app;
