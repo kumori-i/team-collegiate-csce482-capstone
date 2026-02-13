@@ -5,7 +5,6 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import swaggerJsdoc from "swagger-jsdoc";
-import swaggerUi from "swagger-ui-express";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -90,9 +89,47 @@ const swaggerSpec = swaggerJsdoc({
   apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
 });
 
-app.use("/api/docs", swaggerUi.serve);
-app.get("/api/docs", swaggerUi.setup(swaggerSpec));
-app.get("/api/docs/", swaggerUi.setup(swaggerSpec));
+app.get("/api/openapi.json", (_req, res) => {
+  res.json(swaggerSpec);
+});
+
+app.get("/api/docs", (_req, res) => {
+  res.type("html").send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Collegiate API Docs</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"
+    />
+    <style>
+      html, body { margin: 0; padding: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+    <script>
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          url: "/api/openapi.json",
+          dom_id: "#swagger-ui",
+          deepLinking: true,
+          presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+          layout: "StandaloneLayout"
+        });
+      };
+    </script>
+  </body>
+</html>`);
+});
+
+app.get("/api/docs/", (_req, res) => {
+  res.redirect(302, "/api/docs");
+});
 
 const { default: authRoutes } = await import("./routes/auth.js");
 const { default: chatRoutes } = await import("./routes/chat.js");
