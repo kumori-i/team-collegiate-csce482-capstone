@@ -90,7 +90,9 @@ const swaggerSpec = swaggerJsdoc({
   apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
 });
 
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use("/api/docs", swaggerUi.serve);
+app.get("/api/docs", swaggerUi.setup(swaggerSpec));
+app.get("/api/docs/", swaggerUi.setup(swaggerSpec));
 
 const { default: authRoutes } = await import("./routes/auth.js");
 const { default: chatRoutes } = await import("./routes/chat.js");
