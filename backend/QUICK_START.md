@@ -6,28 +6,11 @@ The backend now uses Supabase for player/user data and provider-based LLM calls 
 
 ---
 
-## 🎯 Available API Endpoints
+## 🎯 API Reference
 
-### 🏀 Player Search
-```
-GET  /api/players/search?query=john&limit=50
-GET  /api/players/:id
-POST /api/scouting/generate
-```
+Use Swagger UI for the up-to-date API reference:
 
-### 👤 Authentication (Already Working)
-```
-POST /api/auth/register
-POST /api/auth/login
-POST /api/auth/google
-GET  /api/auth/profile
-DELETE /api/auth/account
-```
-
-### 💬 Chat (Already Working)
-```
-POST /api/chat
-```
+`http://localhost:5001/api/docs`
 
 ---
 
@@ -39,27 +22,9 @@ cd backend
 npm run dev
 ```
 
-### 2. Test player search
+### 2. Open API docs
 ```bash
-# Search for players
-curl "http://localhost:5001/api/players/search?query=lebron"
-
-# Get player by ID (replace with actual ID from search results)
-curl "http://localhost:5001/api/players/YOUR_PLAYER_ID"
-```
-
-### 3. Test AI scouting report
-```bash
-curl -X POST http://localhost:5001/api/scouting/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "LeBron James",
-    "team": "Lakers",
-    "position": "Forward",
-    "pts_g": 25.7,
-    "reb_g": 7.3,
-    "ast_g": 8.3
-  }'
+open http://localhost:5001/api/docs
 ```
 
 ---
@@ -99,37 +64,16 @@ Using Supabase for database
 
 ## 📱 Frontend Integration (Later)
 
-When you're ready to connect the frontend, you'll make API calls like this:
+Use the endpoint definitions and example payloads in Swagger UI:
 
-```javascript
-// Search players
-const response = await fetch('http://localhost:5001/api/players/search?query=john');
-const { players, count } = await response.json();
-
-// Get player details
-const response = await fetch('http://localhost:5001/api/players/player-123');
-const { player } = await response.json();
-
-// Generate AI report
-const response = await fetch('http://localhost:5001/api/scouting/generate', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    name: player.name_split,
-    team: player.team,
-    position: player.position,
-    pts_g: player.pts_g,
-    // ... other stats
-  })
-});
-const { description } = await response.json();
-```
+`http://localhost:5001/api/docs`
 
 ---
 
 ## 📚 Documentation Files
 
-- **API_DOCUMENTATION.md** - Complete API reference with examples
+- **API_DOCUMENTATION.md** - Short pointer to Swagger docs
+- **Swagger UI (`/api/docs`)** - Live API reference and request/response schemas
 - **MIGRATION_SUMMARY.md** - What changed and why
 - **QUICK_START.md** - This file
 

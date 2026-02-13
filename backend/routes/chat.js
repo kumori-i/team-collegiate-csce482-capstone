@@ -2,6 +2,13 @@ import express from "express";
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Chat
+ *     description: Direct chat completion endpoint.
+ */
+
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_GEN_MODEL = process.env.OLLAMA_MODEL || "llama3.1";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -183,6 +190,41 @@ const generateAnswer = async (prompt) => {
   return data.response?.trim() || "";
 };
 
+/**
+ * @swagger
+ * /api/chat:
+ *   post:
+ *     tags: [Chat]
+ *     summary: Generate a chat reply from configured LLM provider
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [message]
+ *             properties:
+ *               message:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Reply generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 reply:
+ *                   type: string
+ *                 sources:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       400:
+ *         description: Message missing
+ *       500:
+ *         description: Chat request failed
+ */
 router.post("/", async (req, res) => {
   try {
     const message =

@@ -4,6 +4,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +43,55 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+const swaggerSpec = swaggerJsdoc({
+  definition: {
+    openapi: "3.0.3",
+    info: {
+      title: "Team Collegiate API",
+      version: "1.0.0",
+      description: "Backend API documentation for Team Collegiate.",
+    },
+    tags: [
+      { name: "Auth", description: "Authentication and account management." },
+      { name: "Chat", description: "Direct chat completion endpoint." },
+      { name: "Players", description: "Player data and report generation." },
+      { name: "Scouting", description: "Scouting report generation." },
+      { name: "Agent", description: "Agent orchestration endpoints." },
+      { name: "System", description: "Service health and diagnostics." },
+    ],
+    servers: [
+      {
+        url:
+          process.env.BACKEND_URL ||
+          `http://localhost:${process.env.PORT || 5001}`,
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+      schemas: {
+        ErrorResponse: {
+          type: "object",
+          properties: {
+            error: {
+              type: "string",
+            },
+          },
+          required: ["error"],
+        },
+      },
+    },
+  },
+  apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
+});
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 const { default: authRoutes } = await import("./routes/auth.js");
 const { default: chatRoutes } = await import("./routes/chat.js");
 const { default: playerRoutes } = await import("./routes/players.js");
@@ -53,6 +104,16 @@ app.use("/api/players", playerRoutes);
 app.use("/api/scouting", scoutingRoutes);
 app.use("/api/agent", agentRoutes);
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     tags: [System]
+ *     summary: Health check endpoint
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ */
 app.get("/health", (_, res) => {
   res.json({ status: "ok" });
 });
@@ -63,5 +124,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`API endpoint: http://localhost:${PORT}/api/auth`);
+  console.log(`Swagger docs: http://localhost:${PORT}/api/docs`);
   console.log("Using Supabase for database");
 });

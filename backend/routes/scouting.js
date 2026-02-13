@@ -2,6 +2,13 @@ import express from "express";
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Scouting
+ *     description: AI scouting report generation endpoint.
+ */
+
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_GEN_MODEL = process.env.OLLAMA_MODEL || "llama3.1";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -179,6 +186,56 @@ const generateReport = async (prompt) => {
 
 // Generate AI scouting report for a player
 // POST /api/scouting/generate
+/**
+ * @swagger
+ * /api/scouting/generate:
+ *   post:
+ *     tags: [Scouting]
+ *     summary: Generate scouting report from player stats
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, team]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               team:
+ *                 type: string
+ *               position:
+ *                 type: string
+ *               class:
+ *                 type: string
+ *               pts_g:
+ *                 type: number
+ *               reb_g:
+ *                 type: number
+ *               ast_g:
+ *                 type: number
+ *               fg:
+ *                 type: number
+ *               c_3pt:
+ *                 type: number
+ *               ft:
+ *                 type: number
+ *               stl_g:
+ *                 type: number
+ *               blk_g:
+ *                 type: number
+ *               to_g:
+ *                 type: number
+ *               min_g:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Report generated
+ *       400:
+ *         description: Missing required player fields
+ *       500:
+ *         description: Generation failed
+ */
 router.post("/generate", async (req, res) => {
   try {
     const {

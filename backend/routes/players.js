@@ -4,6 +4,13 @@ import { runReportAgent } from "../services/agentRunner.js";
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Players
+ *     description: Player search, detail lookup, and report generation.
+ */
+
 const PLAYER_DETAIL_COLUMNS = `unique_id, name_split, team, position, league, class,
   pts_g, reb_g, ast_g, fg, c_3pt, ft, stl_g, blk_g, to_g,
   min_g, g, c_2pt, efg, ts, usg, ppp, orb_g, drb_g, pf_g, a_to,
@@ -11,6 +18,30 @@ const PLAYER_DETAIL_COLUMNS = `unique_id, name_split, team, position, league, cl
 
 // Search players - similar to my-app home page functionality
 // GET /api/players/search?query=john&limit=50
+/**
+ * @swagger
+ * /api/players/search:
+ *   get:
+ *     tags: [Players]
+ *     summary: Search players by name
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *         description: Name fragment to search by
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Max records when query is empty
+ *     responses:
+ *       200:
+ *         description: Player list returned
+ *       500:
+ *         description: Search failed
+ */
 router.get("/search", async (req, res) => {
   try {
     const query =
@@ -48,6 +79,26 @@ router.get("/search", async (req, res) => {
 
 // Get player by unique_id - similar to my-app player detail page
 // GET /api/players/:id
+/**
+ * @swagger
+ * /api/players/{id}:
+ *   get:
+ *     tags: [Players]
+ *     summary: Fetch player detail by unique id
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Player detail returned
+ *       404:
+ *         description: Player not found
+ *       500:
+ *         description: Lookup failed
+ */
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -75,9 +126,40 @@ router.get("/:id", async (req, res) => {
 
 // Generate AI scouting report for a player
 // POST /api/players/report
+/**
+ * @swagger
+ * /api/players/report:
+ *   post:
+ *     tags: [Players]
+ *     summary: Generate a scouting report for provided player payload
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name_split, team]
+ *             properties:
+ *               unique_id:
+ *                 type: string
+ *               name_split:
+ *                 type: string
+ *               team:
+ *                 type: string
+ *               position:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Report generated
+ *       400:
+ *         description: Required player fields missing
+ *       500:
+ *         description: Report generation failed
+ */
 router.post("/report", async (req, res) => {
   try {
-    const playerInput = req.body && typeof req.body === "object" ? req.body : null;
+    const playerInput =
+      req.body && typeof req.body === "object" ? req.body : null;
     if (!playerInput || !playerInput.name_split || !playerInput.team) {
       return res.status(400).json({
         error: "Player payload with name_split and team is required.",

@@ -111,12 +111,10 @@ curl "http://localhost:5001/api/players/search?query=john&limit=5"
 
 ## 📖 API Documentation
 
-See `API_DOCUMENTATION.md` for:
-- Complete endpoint reference
-- Request/response examples
-- Frontend integration code
-- Error handling
-- Testing commands
+Use Swagger UI as the source of truth:
+
+- `http://localhost:5001/api/docs` (local)
+- `<your-backend-url>/api/docs` (deployed)
 
 ---
 
@@ -129,14 +127,7 @@ See `API_DOCUMENTATION.md` for:
    - Can add authentication middleware
    - Centralized business logic
 
-3. **Example frontend fetch calls:**
-```javascript
-// Instead of: supabase.from('ncaa_players_d1_male').select()
-// Use: fetch('http://localhost:5001/api/players/search')
-
-// Instead of: direct provider API call from frontend
-// Use: fetch('http://localhost:5001/api/scouting/generate')
-```
+3. **Use `/api/docs` to generate frontend calls** from the live request/response schemas.
 
 ---
 

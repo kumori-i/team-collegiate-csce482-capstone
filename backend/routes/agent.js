@@ -3,6 +3,37 @@ import { runChatAgent, runReportAgent } from "../services/agentRunner.js";
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Agent
+ *     description: Higher-level agent orchestration endpoints.
+ */
+
+/**
+ * @swagger
+ * /api/agent/chat:
+ *   post:
+ *     tags: [Agent]
+ *     summary: Run chat agent workflow
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [message]
+ *             properties:
+ *               message:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Agent reply returned
+ *       400:
+ *         description: Missing message
+ *       500:
+ *         description: Agent request failed
+ */
 router.post("/chat", async (req, res) => {
   try {
     const message =
@@ -23,6 +54,33 @@ router.post("/chat", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/agent/report:
+ *   post:
+ *     tags: [Agent]
+ *     summary: Run report agent workflow
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *               playerId:
+ *                 type: string
+ *               player:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Agent report returned
+ *       400:
+ *         description: message, player, or playerId required
+ *       500:
+ *         description: Agent request failed
+ */
 router.post("/report", async (req, res) => {
   try {
     const message =
