@@ -37,10 +37,13 @@ export const deleteAccount = async () => {
   return res.data;
 };
 
-export const chatWithDataset = async (message) => {
+export const chatWithAgent = async (message) => {
   const res = await axios.post(`${API_URL}/agent/chat`, { message });
   return res.data;
 };
+
+// Backward-compatible alias for older imports.
+export const chatWithDataset = chatWithAgent;
 
 export const searchPlayers = async (query) => {
   const res = await axios.get(`${API_URL}/players/search`, {
