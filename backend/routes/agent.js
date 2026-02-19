@@ -38,11 +38,13 @@ router.post("/chat", async (req, res) => {
   try {
     const message =
       typeof req.body.message === "string" ? req.body.message.trim() : "";
+    const sessionId =
+      typeof req.body.sessionId === "string" ? req.body.sessionId.trim() : "";
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const { reply, toolUsed } = await runChatAgent(message);
+    const { reply, toolUsed } = await runChatAgent(message, { sessionId });
     return res.json({
       reply,
       agent: "chat",
