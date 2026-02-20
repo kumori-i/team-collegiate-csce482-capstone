@@ -79,3 +79,9 @@ npm start
 - `POST /api/scouting/generate`
 - `POST /api/chat`
 - `GET /health`
+
+## Test and Validation Plan
+
+We have developed a backend test and validation plan for evaluation metrics, acceptance criteria, and runnable API checks.
+
+See `backend/TEST_VALIDATION_PLAN.md` for full details.
