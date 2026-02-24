@@ -34,11 +34,7 @@
     width: 260px;
     height: 260px;
     border-radius: 50%;
-    background: radial-gradient(
-        circle,
-        rgba(244, 122, 32, 0.25),
-        transparent 70%
-    );
+    background: rgba(233, 177, 140, 0.25);
     pointer-events: none;
 }
 
@@ -84,9 +80,9 @@
 }
 
 .hero-button.primary {
-    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    background: var(--accent);
     color: #1b1b1b;
-    box-shadow: 0 12px 24px rgba(244, 122, 32, 0.25);
+    box-shadow: 0 12px 24px rgba(233, 177, 140, 0.25);
 }
 
 .hero-button.ghost {
@@ -186,11 +182,7 @@
 .panel-banner {
     padding: 1.4rem 1.6rem;
     border-radius: var(--radius);
-    background: linear-gradient(
-        135deg,
-        rgba(244, 122, 32, 0.2),
-        rgba(244, 179, 71, 0.15)
-    );
+    background: rgba(233, 177, 140, 0.18);
     border: 1px solid var(--line);
     font-weight: 600;
 }

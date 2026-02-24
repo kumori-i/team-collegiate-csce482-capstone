@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { chatWithDataset } from "../api";
+import ReactMarkdown from "react-markdown";
+import { chatWithAgent } from "../api";
 import "./Chat.css";
 
 export default function Chat() {
@@ -34,7 +35,7 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
-      const data = await chatWithDataset(trimmed);
+      const data = await chatWithAgent(trimmed);
       const assistantMessage = {
         id: Date.now() + 1,
         text: data.reply || "No response from assistant.",
@@ -90,7 +91,13 @@ export default function Chat() {
                   <span className="message-sender">{message.sender}</span>
                   <span className="message-time">{message.timestamp}</span>
                 </div>
-                <div className="message-text">{message.text}</div>
+                <div className="message-text">
+                  {message.sender === "You" ? (
+                    message.text
+                  ) : (
+                    <ReactMarkdown>{message.text}</ReactMarkdown>
+                  )}
+                </div>
                 {message.sources?.length > 0 ? (
                   <div className="message-sources">
                     Sources:{" "}

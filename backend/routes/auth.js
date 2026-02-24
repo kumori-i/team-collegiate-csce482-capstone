@@ -8,6 +8,13 @@ import { supabase } from "../supabase.js";
 const router = express.Router();
 const getGoogleClient = () => new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Auth
+ *     description: Authentication and account management endpoints.
+ */
+
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -27,6 +34,36 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Register
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Register a new user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User created
+ *       400:
+ *         description: Validation error or already registered
+ *       500:
+ *         description: Registration failed
+ */
 router.post("/register", async (req, res) => {
   const { email, password, name } = req.body;
 
@@ -73,7 +110,9 @@ router.post("/register", async (req, res) => {
       if (error.code === "23505") {
         return res.status(400).json({ error: "Email already registered" });
       }
-      return res.status(500).json({ error: error.message || "Registration failed" });
+      return res
+        .status(500)
+        .json({ error: error.message || "Registration failed" });
     }
 
     res.status(201).json({ message: "User created" });
@@ -84,6 +123,40 @@ router.post("/register", async (req, res) => {
 });
 
 // Login
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Log in with email and password
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login succeeded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *       401:
+ *         description: Invalid credentials
+ *       500:
+ *         description: Login failed
+ */
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -117,6 +190,32 @@ router.post("/login", async (req, res) => {
 });
 
 // Google login
+/**
+ * @swagger
+ * /api/auth/google:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Log in with Google ID token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idToken]
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login succeeded
+ *       400:
+ *         description: Missing or invalid token payload
+ *       401:
+ *         description: Google authentication failed
+ *       500:
+ *         description: Server misconfiguration or user persistence failure
+ */
 router.post("/google", async (req, res) => {
   const { idToken } = req.body;
 
@@ -208,6 +307,24 @@ router.post("/google", async (req, res) => {
 });
 
 // Get user profile
+/**
+ * @swagger
+ * /api/auth/profile:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Get the current user's profile
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile returned
+ *       401:
+ *         description: Access token required
+ *       403:
+ *         description: Invalid or expired token
+ *       404:
+ *         description: User not found
+ */
 router.get("/profile", authenticateToken, async (req, res) => {
   try {
     const { data: user, error } = await supabase
@@ -226,6 +343,24 @@ router.get("/profile", authenticateToken, async (req, res) => {
 });
 
 // Delete user account
+/**
+ * @swagger
+ * /api/auth/account:
+ *   delete:
+ *     tags: [Auth]
+ *     summary: Delete the current user's account
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Account deleted
+ *       401:
+ *         description: Access token required
+ *       403:
+ *         description: Invalid or expired token
+ *       404:
+ *         description: User not found
+ */
 router.delete("/account", authenticateToken, async (req, res) => {
   try {
     console.log("Delete account request for user:", req.user.id);

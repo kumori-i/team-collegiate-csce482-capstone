@@ -19,7 +19,7 @@ Implemented comprehensive player search functionality similar to my-app:
 - ✅ Case-insensitive search
 - ✅ Configurable result limits
 - ✅ Full player statistics
-- ✅ AI-powered scouting reports using Gemini
+- ✅ AI-powered scouting reports using configurable providers (`LLM_PROVIDER`)
 
 ---
 
@@ -111,12 +111,10 @@ curl "http://localhost:5001/api/players/search?query=john&limit=5"
 
 ## 📖 API Documentation
 
-See `API_DOCUMENTATION.md` for:
-- Complete endpoint reference
-- Request/response examples
-- Frontend integration code
-- Error handling
-- Testing commands
+Use Swagger UI as the source of truth:
+
+- `http://localhost:5001/api/docs` (local)
+- `<your-backend-url>/api/docs` (deployed)
 
 ---
 
@@ -129,14 +127,7 @@ See `API_DOCUMENTATION.md` for:
    - Can add authentication middleware
    - Centralized business logic
 
-3. **Example frontend fetch calls:**
-```javascript
-// Instead of: supabase.from('ncaa_players_d1_male').select()
-// Use: fetch('http://localhost:5001/api/players/search')
-
-// Instead of: direct Gemini API call
-// Use: fetch('http://localhost:5001/api/scouting/generate')
-```
+3. **Use `/api/docs` to generate frontend calls** from the live request/response schemas.
 
 ---
 
@@ -170,8 +161,8 @@ npm test
 - Check that the `unique_id` column exists
 
 ### Issue: "Failed to generate scouting report"
-- Verify `GEMINI_API_KEY` is set in `.env`
-- Check that your Gemini API quota hasn't been exceeded
+- Verify provider-specific keys are set in `.env` (for example `TAMU_API_KEY` when `LLM_PROVIDER=tamu`)
+- Check that your selected model in `TAMU_CHAT_MODELS` (or provider equivalent) is available
 
 ### Issue: CORS errors from frontend
 - The backend allows all origins in development mode

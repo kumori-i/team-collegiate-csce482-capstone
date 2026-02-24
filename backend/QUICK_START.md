@@ -2,32 +2,15 @@
 
 ## Your Backend is Ready!
 
-The backend has been migrated from MongoDB to Supabase and now includes player search functionality similar to my-app.
+The backend now uses Supabase for player/user data and provider-based LLM calls for chat/report generation.
 
 ---
 
-## 🎯 Available API Endpoints
+## 🎯 API Reference
 
-### 🏀 Player Search
-```
-GET  /api/players/search?query=john&limit=50
-GET  /api/players/:id
-POST /api/scouting/generate
-```
+Use Swagger UI for the up-to-date API reference:
 
-### 👤 Authentication (Already Working)
-```
-POST /api/auth/register
-POST /api/auth/login
-POST /api/auth/google
-GET  /api/auth/profile
-DELETE /api/auth/account
-```
-
-### 💬 Chat (Already Working)
-```
-POST /api/chat
-```
+`http://localhost:5001/api/docs`
 
 ---
 
@@ -39,27 +22,9 @@ cd backend
 npm run dev
 ```
 
-### 2. Test player search
+### 2. Open API docs
 ```bash
-# Search for players
-curl "http://localhost:5001/api/players/search?query=lebron"
-
-# Get player by ID (replace with actual ID from search results)
-curl "http://localhost:5001/api/players/YOUR_PLAYER_ID"
-```
-
-### 3. Test AI scouting report
-```bash
-curl -X POST http://localhost:5001/api/scouting/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "LeBron James",
-    "team": "Lakers",
-    "position": "Forward",
-    "pts_g": 25.7,
-    "reb_g": 7.3,
-    "ast_g": 8.3
-  }'
+open http://localhost:5001/api/docs
 ```
 
 ---
@@ -76,10 +41,12 @@ Make sure these variables are set:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://eofnuhzxwbfdylhwysqc.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sb_publishable_QldAzENSZzOcqCJzulDPhA_Id-piaqm
-GEMINI_API_KEY=AIzaSyAVXhQLv4qSh4pL8SGizNyvHpS5gFoiduc
-GEMINI_CHAT_MODEL=gemini-2.5-flash
+LLM_PROVIDER=tamu
+TAMU_API_KEY=your_api_key
+TAMU_BASE_URL=https://chat-api.tamu.ai
+TAMU_CHAT_MODELS=protected.gpt-4o,protected.gpt-4.1,protected.o3-mini
 ```
-*(These are already in your .env)*
+Use `LLM_PROVIDER=gemini` or `LLM_PROVIDER=ollama` if you want a different model provider.
 
 ### ✅ Step 3: Start Backend
 ```bash
@@ -97,37 +64,16 @@ Using Supabase for database
 
 ## 📱 Frontend Integration (Later)
 
-When you're ready to connect the frontend, you'll make API calls like this:
+Use the endpoint definitions and example payloads in Swagger UI:
 
-```javascript
-// Search players
-const response = await fetch('http://localhost:5001/api/players/search?query=john');
-const { players, count } = await response.json();
-
-// Get player details
-const response = await fetch('http://localhost:5001/api/players/player-123');
-const { player } = await response.json();
-
-// Generate AI report
-const response = await fetch('http://localhost:5001/api/scouting/generate', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    name: player.name_split,
-    team: player.team,
-    position: player.position,
-    pts_g: player.pts_g,
-    // ... other stats
-  })
-});
-const { description } = await response.json();
-```
+`http://localhost:5001/api/docs`
 
 ---
 
 ## 📚 Documentation Files
 
-- **API_DOCUMENTATION.md** - Complete API reference with examples
+- **API_DOCUMENTATION.md** - Short pointer to Swagger docs
+- **Swagger UI (`/api/docs`)** - Live API reference and request/response schemas
 - **MIGRATION_SUMMARY.md** - What changed and why
 - **QUICK_START.md** - This file
 
