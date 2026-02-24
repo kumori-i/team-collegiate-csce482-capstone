@@ -7,13 +7,14 @@ import {
 import { generateWithProvider } from "./llm.js";
 
 const SESSION_MEMORY_TTL_MS = 1000 * 60 * 30;
+const MAX_HISTORY_ITEMS = 20;
+const MAX_HISTORY_ITEM_CHARS = 500;
 const sessionPlayerMemory = new Map();
+const sessionCohortMemory = new Map();
 
 const logToolInvocation = (tool, args = {}) => {
   try {
-    console.log(
-      `[agentRunner] tool_call=${tool} args=${JSON.stringify(args)}`,
-    );
+    console.log(`[agentRunner] tool_call=${tool} args=${JSON.stringify(args)}`);
   } catch {
     console.log(`[agentRunner] tool_call=${tool} args=[unserializable]`);
   }
@@ -47,9 +48,7 @@ const normalizeName = (value) =>
     .trim();
 
 const tokenizeName = (value = "") =>
-  normalizeName(value)
-    .split(" ")
-    .filter(Boolean);
+  normalizeName(value).split(" ").filter(Boolean);
 
 const scoreNameSimilarity = (a = "", b = "") => {
   const aTokens = new Set(tokenizeName(a));
@@ -142,8 +141,9 @@ const detectCompositePositionIntent = (message = "") => {
 const isContextualReportReference = (message = "") => {
   const text = String(message).toLowerCase();
   return (
-    /\bthat player\b|\bthis player\b|\bsame player\b|\bthat one\b|\bthis one\b/.test(text) ||
-    /\breport on (him|her|them)\b|\breport for (him|her|them)\b/.test(text)
+    /\bthat player\b|\bthis player\b|\bsame player\b|\bthat one\b|\bthis one\b/.test(
+      text,
+    ) || /\breport on (him|her|them)\b|\breport for (him|her|them)\b/.test(text)
   );
 };
 
@@ -181,6 +181,78 @@ const setSessionPlayer = (sessionId = "", player = null) => {
   });
 };
 
+const getSessionCohort = (sessionId = "") => {
+  const id = sanitizeSessionId(sessionId);
+  if (!id) return [];
+  const entry = sessionCohortMemory.get(id);
+  if (!entry) return [];
+  if (Date.now() - entry.updatedAt > SESSION_MEMORY_TTL_MS) {
+    sessionCohortMemory.delete(id);
+    return [];
+  }
+  return Array.isArray(entry.players) ? entry.players : [];
+};
+
+const setSessionCohort = (sessionId = "", players = []) => {
+  const id = sanitizeSessionId(sessionId);
+  if (!id || !Array.isArray(players) || players.length === 0) return;
+  const normalized = players
+    .filter((player) => player?.unique_id)
+    .slice(0, 10)
+    .map((player) => ({
+      unique_id: player.unique_id,
+      name_split: player.name_split || "",
+      team: player.team || "",
+      position: player.position || "",
+    }));
+  if (!normalized.length) return;
+  sessionCohortMemory.set(id, {
+    players: normalized,
+    updatedAt: Date.now(),
+  });
+};
+
+export const clearChatSessionMemory = (sessionId = "") => {
+  const id = sanitizeSessionId(sessionId);
+  if (!id) return false;
+  const playerCleared = sessionPlayerMemory.delete(id);
+  const cohortCleared = sessionCohortMemory.delete(id);
+  return playerCleared || cohortCleared;
+};
+
+const normalizeConversationHistory = (history = []) => {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
+  return history
+    .slice(-MAX_HISTORY_ITEMS)
+    .map((item) => {
+      const role = item?.role === "assistant" ? "assistant" : "user";
+      const content = String(item?.content || "").trim();
+      if (!content) {
+        return null;
+      }
+      return {
+        role,
+        content: content.slice(0, MAX_HISTORY_ITEM_CHARS),
+      };
+    })
+    .filter(Boolean);
+};
+
+const formatConversationHistory = (history = []) => {
+  if (!history.length) {
+    return "None";
+  }
+  return history
+    .map((entry, index) => {
+      const speaker = entry.role === "assistant" ? "Assistant" : "User";
+      return `${index + 1}. ${speaker}: ${entry.content}`;
+    })
+    .join("\n");
+};
+
 const extractPrimaryPlayerFromToolResult = (toolResult = {}) => {
   const tool = toolResult?.tool || "";
   const result = toolResult?.result;
@@ -205,6 +277,82 @@ const extractPrimaryPlayerFromToolResult = (toolResult = {}) => {
     return null;
   }
   return null;
+};
+
+const extractCohortFromToolResult = (toolResult = {}) => {
+  const tool = toolResult?.tool || "";
+  const result = toolResult?.result;
+  if (!result) return [];
+
+  if (tool === "top_players" || tool === "top_players_by_position") {
+    return Array.isArray(result.players) ? result.players : [];
+  }
+  if (tool === "search_players+get_player_by_id") {
+    return result.player ? [result.player] : [];
+  }
+  if (tool === "get_player_by_id") {
+    return [result];
+  }
+  if (
+    tool === "search_players" &&
+    Array.isArray(result) &&
+    result.length <= 10
+  ) {
+    return result;
+  }
+  return [];
+};
+
+const detectCohortMetricFollowup = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  const metric = inferTopMetric(text);
+  if (!metric) {
+    return null;
+  }
+  const referencesPriorGroup =
+    /\b(each of|their|those|these|them|listed|above|that list|this list)\b/.test(
+      text,
+    );
+  if (!referencesPriorGroup) {
+    return null;
+  }
+  return { metric };
+};
+
+const formatMetricValue = (metric, value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "N/A";
+  if (
+    metric === "usg" ||
+    metric === "fg" ||
+    metric === "c_3pt" ||
+    metric === "ft" ||
+    metric === "efg" ||
+    metric === "ts"
+  ) {
+    return `${num.toFixed(1)}%`;
+  }
+  return `${num.toFixed(1)}`;
+};
+
+const metricLabel = (metric) => {
+  const labels = {
+    pts_g: "points per game",
+    reb_g: "rebounds per game",
+    ast_g: "assists per game",
+    stl_g: "steals per game",
+    blk_g: "blocks per game",
+    usg: "usage percentage",
+    fg: "field goal percentage",
+    c_3pt: "3-point percentage",
+    ft: "free throw percentage",
+    efg: "effective FG percentage",
+    ts: "true shooting percentage",
+    ppp: "points per possession",
+    a_to: "assist-to-turnover ratio",
+    orb_40: "offensive rebound rate (per 40)",
+  };
+  return labels[metric] || metric;
 };
 
 const pickBestPlayerMatch = (playerName, matches) => {
@@ -312,7 +460,9 @@ const resolvePlayerSearchForChat = async (args = {}) => {
 
   if (matches.length === 0) {
     const queryTokens = tokenizeName(query);
-    const fallbackTokens = [...new Set([queryTokens[0], queryTokens[queryTokens.length - 1]])]
+    const fallbackTokens = [
+      ...new Set([queryTokens[0], queryTokens[queryTokens.length - 1]]),
+    ]
       .filter((token) => token && token.length >= 2)
       .slice(0, 2);
 
@@ -328,7 +478,9 @@ const resolvePlayerSearchForChat = async (args = {}) => {
     }
 
     const deduped = Array.from(
-      new Map(fallbackMatches.map((player) => [player.unique_id, player])).values(),
+      new Map(
+        fallbackMatches.map((player) => [player.unique_id, player]),
+      ).values(),
     );
 
     const ranked = deduped
@@ -378,7 +530,7 @@ const resolvePlayerSearchForChat = async (args = {}) => {
   return { tool: "search_players", result: matches };
 };
 
-const extractReportTarget = async (message) => {
+const extractReportTarget = async (message, { historyText = "None" } = {}) => {
   if (!message?.trim()) {
     return null;
   }
@@ -396,6 +548,10 @@ Rules:
 - playerName should be a full player name if present.
 
 Request:
+Conversation context:
+${historyText}
+
+Latest user request:
 ${message}`;
 
   const raw = await generateWithProvider(prompt);
@@ -408,12 +564,14 @@ ${message}`;
     playerName:
       typeof parsed.playerName === "string" ? parsed.playerName.trim() : "",
     team: typeof parsed.team === "string" ? parsed.team.trim() : "",
-    position:
-      typeof parsed.position === "string" ? parsed.position.trim() : "",
+    position: typeof parsed.position === "string" ? parsed.position.trim() : "",
   };
 };
 
-export const decideChatTool = async (message) => {
+export const decideChatTool = async (
+  message,
+  { historyText = "None" } = {},
+) => {
   const prompt = `You are a routing agent for basketball database tools.
 Return ONLY valid JSON with this schema:
 {
@@ -439,6 +597,10 @@ Guidelines:
   { "position": "", "team": "", "limit": 10, "minGames": 5, "focusMetric": "" }
 
 User message:
+Conversation context:
+${historyText}
+
+Latest user message:
 ${message}`;
 
   const raw = await generateWithProvider(prompt);
@@ -452,7 +614,9 @@ ${message}`;
 export const runToolPlan = async (plan) => {
   const args = plan?.args || {};
   if (plan.tool === "search_players") {
-    const query = String(args.query ?? args.name ?? args.playerName ?? "").trim();
+    const query = String(
+      args.query ?? args.name ?? args.playerName ?? "",
+    ).trim();
     logToolInvocation("search_players", {
       query,
       team: args.team || "",
@@ -492,7 +656,10 @@ export const runToolPlan = async (plan) => {
     return { tool: "top_players", result };
   }
 
-  if (plan.tool === "top_players_by_position" || plan.tool === "effective_players") {
+  if (
+    plan.tool === "top_players_by_position" ||
+    plan.tool === "effective_players"
+  ) {
     logToolInvocation("top_players_by_position", {
       position: args.position || "",
       team: args.team || "",
@@ -513,8 +680,13 @@ export const runToolPlan = async (plan) => {
   return { tool: "none", result: null };
 };
 
-export const runChatAgent = async (message, { sessionId = "" } = {}) => {
+export const runChatAgent = async (
+  message,
+  { sessionId = "", history = [] } = {},
+) => {
   const safeSessionId = sanitizeSessionId(sessionId);
+  const normalizedHistory = normalizeConversationHistory(history);
+  const historyText = formatConversationHistory(normalizedHistory);
   const reportIntent =
     /\b(report|scouting report|scout report|write up|write-up|player report)\b/i.test(
       message,
@@ -528,6 +700,7 @@ export const runChatAgent = async (message, { sessionId = "" } = {}) => {
     const delegated = await runReportAgent({
       message,
       playerInput: rememberedPlayer,
+      conversationHistoryText: historyText,
     });
     const delegatedPlayer =
       delegated?.evidence?.player ||
@@ -542,6 +715,48 @@ export const runChatAgent = async (message, { sessionId = "" } = {}) => {
       toolUsed: `chat->report:${delegated.toolUsed}`,
       evidence: delegated.evidence,
     };
+  }
+
+  const cohortMetricFollowup = detectCohortMetricFollowup(message);
+  if (cohortMetricFollowup) {
+    const rememberedCohort = getSessionCohort(safeSessionId);
+    if (rememberedCohort.length > 0) {
+      const detailedPlayers = (
+        await Promise.all(
+          rememberedCohort.map(async (player) => {
+            try {
+              return await getPlayer(player.unique_id);
+            } catch {
+              return null;
+            }
+          }),
+        )
+      ).filter(Boolean);
+
+      const metric = cohortMetricFollowup.metric;
+      const lines = detailedPlayers
+        .map((player) => {
+          const value = formatMetricValue(metric, player?.[metric]);
+          return `- ${player.name_split} (${player.team || "Unknown team"}): ${value}`;
+        })
+        .filter(Boolean);
+
+      if (lines.length > 0) {
+        return {
+          reply: `For the same players from the previous list, here are their ${metricLabel(metric)} values:\n${lines.join("\n")}`,
+          toolUsed: "session_cohort_metric_lookup",
+          evidence: {
+            metric,
+            players: detailedPlayers.map((player) => ({
+              unique_id: player.unique_id,
+              name_split: player.name_split,
+              team: player.team,
+              value: player?.[metric] ?? null,
+            })),
+          },
+        };
+      }
+    }
   }
 
   const metricByPositionIntent = detectTopMetricByPositionIntent(message);
@@ -560,6 +775,8 @@ ${message}
 Tool used: ${topMetricResult.tool}
 Tool result JSON:
 ${JSON.stringify(topMetricResult.result)}
+Conversation context:
+${historyText}
 
 Respond with:
 1) the best candidate name,
@@ -570,6 +787,10 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     setSessionPlayer(
       safeSessionId,
       extractPrimaryPlayerFromToolResult(topMetricResult),
+    );
+    setSessionCohort(
+      safeSessionId,
+      extractCohortFromToolResult(topMetricResult),
     );
     return {
       reply,
@@ -594,6 +815,8 @@ ${message}
 Tool used: ${compositeResult.tool}
 Tool result JSON:
 ${JSON.stringify(compositeResult.result)}
+Conversation context:
+${historyText}
 
 Respond with:
 1) the best candidate name,
@@ -605,6 +828,10 @@ If tool result is empty, say there is not enough database evidence and ask a cla
       safeSessionId,
       extractPrimaryPlayerFromToolResult(compositeResult),
     );
+    setSessionCohort(
+      safeSessionId,
+      extractCohortFromToolResult(compositeResult),
+    );
     return {
       reply,
       toolUsed: compositeResult.tool,
@@ -612,9 +839,9 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     };
   }
 
-  let plan = await decideChatTool(message);
+  let plan = await decideChatTool(message, { historyText });
   if (plan.tool === "none") {
-    const extracted = await extractReportTarget(message);
+    const extracted = await extractReportTarget(message, { historyText });
     if (extracted?.playerName) {
       plan = {
         tool: "search_players",
@@ -668,6 +895,8 @@ ${message}
 Tool used: ${toolResult.tool}
 Tool result JSON:
 ${JSON.stringify(toolResult.result)}
+Conversation context:
+${historyText}
 
 Return a concise, helpful response grounded only in the tool result.`;
 
@@ -676,6 +905,7 @@ Return a concise, helpful response grounded only in the tool result.`;
     safeSessionId,
     extractPrimaryPlayerFromToolResult(toolResult),
   );
+  setSessionCohort(safeSessionId, extractCohortFromToolResult(toolResult));
   const resolvedName = toolResult.result?.resolvedName;
   const originalQuery = toolResult.result?.query;
   if (
@@ -700,6 +930,7 @@ export const runReportAgent = async ({
   message = "",
   playerInput = null,
   playerId = "",
+  conversationHistoryText = "None",
 }) => {
   let evidence = {};
   let toolUsed = "none";
@@ -728,7 +959,9 @@ export const runReportAgent = async ({
     };
     toolUsed = "search_players";
   } else {
-    const extracted = await extractReportTarget(message);
+    const extracted = await extractReportTarget(message, {
+      historyText: conversationHistoryText,
+    });
     if (extracted?.playerName) {
       logToolInvocation("search_players", {
         query: extracted.playerName,
@@ -764,7 +997,9 @@ export const runReportAgent = async ({
     }
 
     if (toolUsed === "none") {
-      const plan = await decideChatTool(message);
+      const plan = await decideChatTool(message, {
+        historyText: conversationHistoryText,
+      });
       const toolResult = await runToolPlan(
         plan.tool === "none"
           ? { tool: "top_players", args: { metric: "pts_g", limit: 10 } }
@@ -783,6 +1018,8 @@ If data is incomplete, explicitly state limitations.
 
 User request:
 ${message || "Generate a scouting report from provided player data."}
+Conversation context:
+${conversationHistoryText}
 
 Evidence JSON:
 ${JSON.stringify(evidence)}

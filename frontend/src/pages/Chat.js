@@ -1,20 +1,120 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { chatWithAgent } from "../api";
+import { chatWithAgent, resetAgentSession } from "../api";
 import "./Chat.css";
 
+const CHAT_MESSAGES_STORAGE_KEY = "chatMessagesBySession";
+const MAX_HISTORY_MESSAGES = 20;
+
+const createSessionId = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `session-${Date.now()}`;
+
+const getSessionId = () => {
+  let sessionId = localStorage.getItem("agentSessionId");
+  if (!sessionId) {
+    sessionId = createSessionId();
+    localStorage.setItem("agentSessionId", sessionId);
+  }
+  return sessionId;
+};
+
+const loadMessagesForSession = (sessionId) => {
+  try {
+    const raw = localStorage.getItem(CHAT_MESSAGES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return [];
+    const sessionMessages = parsed[sessionId];
+    return Array.isArray(sessionMessages) ? sessionMessages : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveMessagesForSession = (sessionId, messages) => {
+  try {
+    const raw = localStorage.getItem(CHAT_MESSAGES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const safeStore =
+      parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed
+        : {};
+    safeStore[sessionId] = messages;
+    localStorage.setItem(CHAT_MESSAGES_STORAGE_KEY, JSON.stringify(safeStore));
+  } catch {
+    // Ignore localStorage write errors.
+  }
+};
+
+const removeMessagesForSession = (sessionId) => {
+  try {
+    const raw = localStorage.getItem(CHAT_MESSAGES_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+    delete parsed[sessionId];
+    localStorage.setItem(CHAT_MESSAGES_STORAGE_KEY, JSON.stringify(parsed));
+  } catch {
+    // Ignore localStorage write errors.
+  }
+};
+
+const toAgentHistory = (messages) =>
+  messages
+    .filter(
+      (message) => message.sender === "You" || message.sender === "Assistant",
+    )
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map((message) => ({
+      role: message.sender === "You" ? "user" : "assistant",
+      content: String(message.text || ""),
+    }))
+    .filter((item) => item.content.trim().length > 0);
+
 export default function Chat() {
-  const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(() => getSessionId());
+  const [messages, setMessages] = useState(() =>
+    loadMessagesForSession(sessionId),
+  );
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef(null);
 
   useEffect(() => {
+    setMessages(loadMessagesForSession(sessionId));
+  }, [sessionId]);
+
+  useEffect(() => {
+    saveMessagesForSession(sessionId, messages);
+  }, [messages, sessionId]);
+
+  useEffect(() => {
     if (endRef.current) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isLoading]);
+
+  const handleResetChat = async () => {
+    if (isLoading) return;
+    const oldSessionId = sessionId;
+
+    try {
+      await resetAgentSession(oldSessionId);
+    } catch {
+      // Continue with local reset even if backend reset fails.
+    }
+
+    removeMessagesForSession(oldSessionId);
+    const nextSessionId = createSessionId();
+    localStorage.setItem("agentSessionId", nextSessionId);
+    setSessionId(nextSessionId);
+    setMessages([]);
+    setNewMessage("");
+    setError("");
+  };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -35,7 +135,7 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
-      const data = await chatWithAgent(trimmed);
+      const data = await chatWithAgent(trimmed, toAgentHistory(messages));
       const assistantMessage = {
         id: Date.now() + 1,
         text: data.reply || "No response from assistant.",
@@ -71,6 +171,14 @@ export default function Chat() {
           <div className="chat-status">
             <span className={isLoading ? "dot active" : "dot"} />
             {isLoading ? "Thinking" : "Ready"}
+            <button
+              type="button"
+              className="chat-reset-button"
+              onClick={handleResetChat}
+              disabled={isLoading}
+            >
+              Reset
+            </button>
           </div>
         </div>
 

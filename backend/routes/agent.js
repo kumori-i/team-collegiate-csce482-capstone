@@ -1,5 +1,9 @@
 import express from "express";
-import { runChatAgent, runReportAgent } from "../services/agentRunner.js";
+import {
+  clearChatSessionMemory,
+  runChatAgent,
+  runReportAgent,
+} from "../services/agentRunner.js";
 
 const router = express.Router();
 
@@ -40,11 +44,15 @@ router.post("/chat", async (req, res) => {
       typeof req.body.message === "string" ? req.body.message.trim() : "";
     const sessionId =
       typeof req.body.sessionId === "string" ? req.body.sessionId.trim() : "";
+    const history = Array.isArray(req.body.history) ? req.body.history : [];
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const { reply, toolUsed } = await runChatAgent(message, { sessionId });
+    const { reply, toolUsed } = await runChatAgent(message, {
+      sessionId,
+      history,
+    });
     return res.json({
       reply,
       agent: "chat",
@@ -53,6 +61,21 @@ router.post("/chat", async (req, res) => {
   } catch (err) {
     console.error("Agent chat error:", err);
     return res.status(500).json({ error: "Agent chat request failed." });
+  }
+});
+
+router.post("/reset", async (req, res) => {
+  try {
+    const sessionId =
+      typeof req.body.sessionId === "string" ? req.body.sessionId.trim() : "";
+    if (!sessionId) {
+      return res.status(400).json({ error: "sessionId is required." });
+    }
+    clearChatSessionMemory(sessionId);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Agent reset error:", err);
+    return res.status(500).json({ error: "Agent reset request failed." });
   }
 });
 

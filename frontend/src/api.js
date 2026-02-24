@@ -37,7 +37,7 @@ export const deleteAccount = async () => {
   return res.data;
 };
 
-export const chatWithAgent = async (message) => {
+export const chatWithAgent = async (message, history = []) => {
   let sessionId = localStorage.getItem("agentSessionId");
   if (!sessionId) {
     sessionId =
@@ -46,7 +46,16 @@ export const chatWithAgent = async (message) => {
         : `session-${Date.now()}`;
     localStorage.setItem("agentSessionId", sessionId);
   }
-  const res = await axios.post(`${API_URL}/agent/chat`, { message, sessionId });
+  const res = await axios.post(`${API_URL}/agent/chat`, {
+    message,
+    sessionId,
+    history,
+  });
+  return res.data;
+};
+
+export const resetAgentSession = async (sessionId) => {
+  const res = await axios.post(`${API_URL}/agent/reset`, { sessionId });
   return res.data;
 };
 
