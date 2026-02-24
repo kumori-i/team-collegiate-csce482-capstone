@@ -47,3 +47,6 @@ out/
 # =========================
 logs/
 *.log
+
+# Generated data cache
+backend/.cache/
