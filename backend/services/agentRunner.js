@@ -1,5 +1,6 @@
 import {
   getPlayer,
+  getSimilarPlayers,
   getTopPlayersByPosition,
   getTopPlayersByMetric,
   searchPlayers,
@@ -80,16 +81,25 @@ const normalizePositionForQuery = (message = "") => {
 
 const inferEfficiencyMetric = (message = "") => {
   const text = String(message).toLowerCase();
+  if (/\batr\b|\bassist[- ]?to[- ]?turnover\b|\ba\/to\b/.test(text)) return "a_to";
+  if (/\b3pe\b|\bc_3pe\b/.test(text)) return "c_3pe";
+  if (/\bpsp\b/.test(text)) return "psp";
+  if (/\bfgs\b/.test(text)) return "fgs";
+  if (/\bdsi\b/.test(text)) return "dsi";
   if (/\btrue shooting\b|\bts\b/.test(text)) return "ts";
   if (/\beffective field goal\b|\befg\b/.test(text)) return "efg";
   if (/\bpoints per possession\b|\bppp\b/.test(text)) return "ppp";
-  if (/\bassist[- ]?to[- ]?turnover\b|\ba\/to\b/.test(text)) return "a_to";
   if (/\befficien|effective|efficient\b/.test(text)) return "ts";
   return "";
 };
 
 const inferTopMetric = (message = "") => {
   const text = String(message).toLowerCase();
+  if (/\bpsp\b/.test(text)) return "psp";
+  if (/\b3pe\b|\bc_3pe\b/.test(text)) return "c_3pe";
+  if (/\bfgs\b/.test(text)) return "fgs";
+  if (/\batr\b/.test(text)) return "a_to";
+  if (/\bdsi\b/.test(text)) return "dsi";
   if (/\bpoints\b|\bscoring\b|\bscore\b/.test(text)) return "pts_g";
   if (/\brebounds?\b/.test(text)) return "reb_g";
   if (/\bassists?\b/.test(text)) return "ast_g";
@@ -138,6 +148,33 @@ const detectCompositePositionIntent = (message = "") => {
     minGames: 5,
   };
 };
+
+const detectSimilarPlayersIntent = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  if (
+    !/\bsimilar to\b|\bplayers like\b|\bplayer like\b|\bcomparable to\b|\bclosest to\b|\bplayers similar to\b/.test(
+      text,
+    )
+  ) {
+    return null;
+  }
+  const explicitLimitMatch =
+    text.match(/\btop\s+(\d{1,3})\b/) ||
+    text.match(/\b(\d{1,3})\s+(?:players?|guards?|forwards?|centers?)\b/);
+  const limit = Math.min(
+    Math.max(Number(explicitLimitMatch?.[1] || explicitLimitMatch?.[2] || 10), 1),
+    100,
+  );
+  return { limit, minGames: 5 };
+};
+
+const isPlayerComparisonIntent = (message = "") =>
+  /\b(compare|comparison|versus|vs\.?|v\.?|better than|who is better|between)\b/i.test(
+    String(message || ""),
+  );
+
+const FIVE_METRIC_GUIDANCE =
+  "For any player comparison or ranking, prioritize only these metrics: PSP (psp), 3PE (c_3pe), FGS (fgs), ATR (a_to), and DSI (dsi).";
 
 const isContextualReportReference = (message = "") => {
   const text = String(message).toLowerCase();
@@ -197,6 +234,9 @@ const extractPrimaryPlayerFromToolResult = (toolResult = {}) => {
   }
   if (tool === "top_players_by_position") {
     return result.players?.[0] || null;
+  }
+  if (tool === "similar_players") {
+    return result.targetPlayer || result.players?.[0] || null;
   }
   if (tool === "search_players") {
     if (Array.isArray(result) && result.length === 1) {
@@ -417,7 +457,7 @@ export const decideChatTool = async (message) => {
   const prompt = `You are a routing agent for basketball database tools.
 Return ONLY valid JSON with this schema:
 {
-  "tool": "search_players" | "get_player_by_id" | "top_players" | "top_players_by_position" | "effective_players" | "none",
+  "tool": "search_players" | "get_player_by_id" | "top_players" | "top_players_by_position" | "effective_players" | "similar_players" | "none",
   "args": { ... }
 }
 
@@ -427,9 +467,10 @@ Guidelines:
 - Use "top_players" when user asks for top/best/ranking by a metric.
 - Use "top_players_by_position" when user asks for best/top/most effective players at a position.
 - "effective_players" is a legacy alias for "top_players_by_position".
+- Use "similar_players" when user asks for players similar to another player.
 - Use "none" for pure conversation.
 - For top/best:
-  allowed metrics: pts_g, reb_g, ast_g, stl_g, blk_g, fg, c_3pt, ft, efg, ts, usg, ppp, a_to, orb_40, ram, c_ram, psp, c_3pe, dsi, fgs, bms
+  allowed metrics: psp, c_3pe, fgs, a_to, dsi
 - For "search_players" args, use:
   { "query": "<player name or search text>", "team": "", "position": "", "limit": 20 }
 - Do not use "name" as a key. Put player names in "query".
@@ -437,6 +478,8 @@ Guidelines:
   { "position": "", "team": "", "limit": 10, "minGames": 5, "focusMetric": "" }
 - For "effective_players" args, use:
   { "position": "", "team": "", "limit": 10, "minGames": 5, "focusMetric": "" }
+- For "similar_players" args, use:
+  { "query": "<target player name>", "team": "", "position": "", "limit": 10, "minGames": 5 }
 
 User message:
 ${message}`;
@@ -476,14 +519,14 @@ export const runToolPlan = async (plan) => {
 
   if (plan.tool === "top_players") {
     logToolInvocation("top_players", {
-      metric: args.metric || "pts_g",
+      metric: args.metric || "psp",
       position: args.position || "",
       team: args.team || "",
       limit: args.limit || 10,
       minGames: args.minGames || 5,
     });
     const result = await getTopPlayersByMetric({
-      metric: args.metric || "pts_g",
+      metric: args.metric || "psp",
       position: args.position || "",
       team: args.team || "",
       limit: args.limit || 10,
@@ -508,6 +551,54 @@ export const runToolPlan = async (plan) => {
       focusMetric: args.focusMetric || "",
     });
     return { tool: "top_players_by_position", result };
+  }
+
+  if (plan.tool === "similar_players") {
+    const query = String(args.query ?? args.name ?? args.playerName ?? "").trim();
+    if (!query) {
+      return { tool: "none", result: null };
+    }
+    const resolved = await resolvePlayerSearchForChat({
+      query,
+      team: args.targetTeam || "",
+      position: args.targetPosition || "",
+      limit: 20,
+    });
+
+    const targetPlayer =
+      resolved?.tool === "search_players+get_player_by_id"
+        ? resolved?.result?.player
+        : null;
+
+    if (!targetPlayer?.unique_id) {
+      return resolved;
+    }
+
+    logToolInvocation("similar_players", {
+      targetPlayerId: targetPlayer.unique_id,
+      query,
+      position: args.position || "",
+      team: args.team || "",
+      limit: args.limit || 10,
+      minGames: args.minGames || 5,
+    });
+
+    const result = await getSimilarPlayers({
+      playerId: targetPlayer.unique_id,
+      position: args.position || "",
+      team: args.team || "",
+      limit: args.limit || 10,
+      minGames: args.minGames || 5,
+    });
+
+    return {
+      tool: "similar_players",
+      result: {
+        query,
+        resolvedName: targetPlayer.name_split,
+        ...result,
+      },
+    };
   }
 
   return { tool: "none", result: null };
@@ -612,6 +703,82 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     };
   }
 
+  const similarPlayersIntent = detectSimilarPlayersIntent(message);
+  if (similarPlayersIntent) {
+    const extracted = await extractReportTarget(message);
+    const query = extracted?.playerName || "";
+    if (!query) {
+      return {
+        reply:
+          "I can do that, but I need the target player name first. Who should I use as the baseline for similar-player matching?",
+        toolUsed: "none",
+        evidence: null,
+      };
+    }
+    const similarResult = await runToolPlan({
+      tool: "similar_players",
+      args: {
+        query,
+        targetTeam: extracted?.team || "",
+        targetPosition: extracted?.position || "",
+        limit: similarPlayersIntent.limit,
+        minGames: similarPlayersIntent.minGames,
+      },
+    });
+
+    if (
+      similarResult.tool === "search_players" &&
+      (similarResult.result?.ambiguity === "duplicate_exact_name" ||
+        similarResult.result?.ambiguity === "similar_name_candidates")
+    ) {
+      const candidates = similarResult.result.candidates || [];
+      const candidateSummary = candidates
+        .slice(0, 5)
+        .map(
+          (p, idx) =>
+            `${idx + 1}. ${p.name_split} - ${p.team || "Unknown team"} (${p.position || "N/A"}) [id: ${p.unique_id}]`,
+        )
+        .join("\n");
+
+      return {
+        reply:
+          similarResult.result.ambiguity === "duplicate_exact_name"
+            ? `I found multiple players with the exact name "${similarResult.result.query}". Please clarify which one you mean:\n${candidateSummary}\n\nYou can reply with the player id, team, or position.`
+            : `I couldn't find an exact name match for "${similarResult.result.query}", but I found similar players:\n${candidateSummary}\n\nWhich player did you mean? You can reply with the player id, team, or position.`,
+        toolUsed: similarResult.tool,
+        evidence: similarResult.result,
+      };
+    }
+
+    const replyPrompt = `You are the chat agent for a basketball analytics app.
+You must use ONLY the tool result below for factual claims.
+Do NOT use outside knowledge, assumptions, or any external data.
+For any player comparison or ranking, prioritize only these metrics: PSP (psp), 3PE (c_3pe), FGS (fgs), ATR (a_to), and DSI (dsi).
+
+User message:
+${message}
+
+Tool used: ${similarResult.tool}
+Tool result JSON:
+${JSON.stringify(similarResult.result)}
+
+Respond with:
+1) a one-line statement of the target player,
+2) the top similar players ranked in order,
+3) a brief reason grounded in PSP, 3PE, FGS, ATR, and DSI.
+If tool result is empty, say there is not enough database evidence and ask a clarifying question.`;
+    const reply = await generateWithProvider(replyPrompt);
+    setSessionPlayer(
+      safeSessionId,
+      extractPrimaryPlayerFromToolResult(similarResult),
+    );
+    return {
+      reply,
+      toolUsed: similarResult.tool,
+      evidence: similarResult.result,
+    };
+  }
+
   let plan = await decideChatTool(message);
   if (plan.tool === "none") {
     const extracted = await extractReportTarget(message);
@@ -661,6 +828,7 @@ If tool result is empty, say there is not enough database evidence and ask a cla
 You must use ONLY the tool result below for factual claims.
 Do NOT use outside knowledge, assumptions, or any external data.
 If the tool result is null/empty or does not contain enough data, say you do not have enough database evidence and ask a clarifying question.
+${isPlayerComparisonIntent(message) ? FIVE_METRIC_GUIDANCE : ""}
 
 User message:
 ${message}
@@ -767,7 +935,7 @@ export const runReportAgent = async ({
       const plan = await decideChatTool(message);
       const toolResult = await runToolPlan(
         plan.tool === "none"
-          ? { tool: "top_players", args: { metric: "pts_g", limit: 10 } }
+          ? { tool: "top_players", args: { metric: "psp", limit: 10 } }
           : plan,
       );
       evidence = { userRequest: message, result: toolResult.result };
@@ -780,6 +948,7 @@ Generate a coach-friendly, evidence-based report from the data below.
 Use ONLY the evidence JSON for factual claims.
 Do NOT use outside knowledge, assumptions, memory, or any external data.
 If data is incomplete, explicitly state limitations.
+${isPlayerComparisonIntent(message) ? FIVE_METRIC_GUIDANCE : ""}
 
 User request:
 ${message || "Generate a scouting report from provided player data."}

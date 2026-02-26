@@ -14,31 +14,10 @@ const CACHE_FILE = path.resolve(__dirname, "../.cache/top90_stats.json");
 const CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 const ELITE_PERCENTILE = 0.9;
 
-const ELITE_STAT_METRICS = [
-  "pts_g",
-  "reb_g",
-  "ast_g",
-  "stl_g",
-  "blk_g",
-  "fg",
-  "c_3pt",
-  "ft",
-  "efg",
-  "ts",
-  "usg",
-  "ppp",
-  "a_to",
-  "orb_40",
-  "ram",
-  "c_ram",
-  "psp",
-  "c_3pe",
-  "dsi",
-  "fgs",
-  "bms",
-];
+const ELITE_STAT_METRICS = ["psp", "c_3pe", "fgs", "a_to", "dsi"];
 
 const METRIC_SELECT_LIST = ELITE_STAT_METRICS.join(", ");
+const PLAYER_SIMILARITY_SELECT = `unique_id, name_split, team, position, class, league, g, ${METRIC_SELECT_LIST}`;
 
 const normalizePositionFilter = (value = "") => {
   const raw = String(value || "").trim();
@@ -200,38 +179,155 @@ export const getPlayer = async (id) => {
   return data;
 };
 
+export const getSimilarPlayers = async ({
+  playerId = "",
+  position = "",
+  team = "",
+  limit = 10,
+  minGames = 5,
+}) => {
+  const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 100);
+  const safeMinGames = Math.max(0, Number(minGames) || 0);
+  const safePosition = normalizePositionFilter(position);
+  const target = await getPlayer(playerId);
+
+  if (!target?.unique_id) {
+    throw new Error("Target player not found for similarity search.");
+  }
+
+  const missingTargetMetrics = ELITE_STAT_METRICS.filter(
+    (metric) => !Number.isFinite(Number(target?.[metric])),
+  );
+  if (missingTargetMetrics.length > 0) {
+    throw new Error(
+      `Target player is missing similarity metrics: ${missingTargetMetrics.join(", ")}`,
+    );
+  }
+
+  const candidatePosition = safePosition || target.position || "";
+  const whereParts = [
+    `name_split IS NOT NULL`,
+    `name_split <> ''`,
+    `unique_id <> '${String(target.unique_id)}'`,
+    `g >= ${safeMinGames}`,
+  ];
+  if (candidatePosition) whereParts.push(`position ILIKE '%${candidatePosition}%'`);
+  if (team) whereParts.push(`team ILIKE '%${team}%'`);
+  console.log(
+    `[agentTools.getSimilarPlayers] sql=SELECT ${PLAYER_SIMILARITY_SELECT} FROM ncaa_players_d1_male WHERE ${whereParts.join(" AND ")} LIMIT ${Math.max(safeLimit * 25, 250)};`,
+  );
+
+  let supabaseQuery = supabase
+    .from("ncaa_players_d1_male")
+    .select(PLAYER_SIMILARITY_SELECT)
+    .not("name_split", "is", null)
+    .neq("name_split", "")
+    .neq("unique_id", target.unique_id)
+    .gte("g", safeMinGames)
+    .limit(Math.max(safeLimit * 25, 250));
+
+  if (candidatePosition) {
+    supabaseQuery = supabaseQuery.ilike("position", `%${candidatePosition}%`);
+  }
+  if (team) {
+    supabaseQuery = supabaseQuery.ilike("team", `%${team}%`);
+  }
+
+  const { data, error } = await supabaseQuery;
+  if (error) {
+    throw new Error(`Similar players query failed: ${error.message}`);
+  }
+
+  const rawCandidates = (data || []).filter((player) =>
+    ELITE_STAT_METRICS.every((metric) => Number.isFinite(Number(player?.[metric]))),
+  );
+
+  const stats = Object.fromEntries(
+    ELITE_STAT_METRICS.map((metric) => {
+      const values = [target, ...rawCandidates]
+        .map((p) => Number(p[metric]))
+        .filter((v) => Number.isFinite(v));
+      const mean = values.reduce((sum, v) => sum + v, 0) / Math.max(values.length, 1);
+      const variance =
+        values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / Math.max(values.length, 1);
+      const stdDev = Math.sqrt(variance);
+      return [metric, { stdDev: stdDev > 0 ? stdDev : 1 }];
+    }),
+  );
+
+  const players = rawCandidates
+    .map((candidate) => {
+      const componentDiffs = ELITE_STAT_METRICS.map((metric) => {
+        const targetValue = Number(target[metric]);
+        const candidateValue = Number(candidate[metric]);
+        const zDiff = Math.abs(candidateValue - targetValue) / stats[metric].stdDev;
+        return {
+          metric,
+          targetValue,
+          candidateValue,
+          zDiff: Number(zDiff.toFixed(4)),
+        };
+      });
+      const distance = Math.sqrt(
+        componentDiffs.reduce((sum, part) => sum + part.zDiff ** 2, 0) /
+          ELITE_STAT_METRICS.length,
+      );
+      return {
+        ...candidate,
+        similarityDistance: Number(distance.toFixed(4)),
+        similarityScore: Number((1 / (1 + distance)).toFixed(4)),
+        similarityBreakdown: componentDiffs,
+      };
+    })
+    .sort((a, b) => {
+      if (a.similarityDistance !== b.similarityDistance) {
+        return a.similarityDistance - b.similarityDistance;
+      }
+      return Number(b.psp) - Number(a.psp);
+    })
+    .slice(0, safeLimit);
+
+  return {
+    targetPlayer: {
+      unique_id: target.unique_id,
+      name_split: target.name_split,
+      team: target.team,
+      position: target.position,
+      class: target.class,
+      league: target.league,
+      g: target.g,
+      psp: target.psp,
+      c_3pe: target.c_3pe,
+      fgs: target.fgs,
+      a_to: target.a_to,
+      dsi: target.dsi,
+    },
+    metricsUsed: ELITE_STAT_METRICS,
+    filters: {
+      position: candidatePosition || null,
+      team: team || null,
+      minGames: safeMinGames,
+    },
+    players,
+  };
+};
+
 export const getTopPlayersByMetric = async ({
-  metric = "pts_g",
+  metric = "psp",
   position = "",
   team = "",
   limit = 10,
   minGames = 5,
 }) => {
   const allowlistedMetrics = new Set([
-    "pts_g",
-    "reb_g",
-    "ast_g",
-    "stl_g",
-    "blk_g",
-    "fg",
-    "c_3pt",
-    "ft",
-    "efg",
-    "ts",
-    "usg",
-    "ppp",
     "a_to",
-    "orb_40",
-    "ram",
-    "c_ram",
     "psp",
     "c_3pe",
     "dsi",
     "fgs",
-    "bms",
   ]);
 
-  const safeMetric = allowlistedMetrics.has(metric) ? metric : "pts_g";
+  const safeMetric = allowlistedMetrics.has(metric) ? metric : "psp";
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 100);
   const safeMinGames = Number(minGames) || 0;
   const safePosition = normalizePositionFilter(position);
@@ -239,12 +335,12 @@ export const getTopPlayersByMetric = async ({
   if (safePosition) whereParts.push(`position ILIKE '%${safePosition}%'`);
   if (team) whereParts.push(`team ILIKE '%${team}%'`);
   console.log(
-    `[agentTools.getTopPlayersByMetric] sql=SELECT unique_id, name_split, team, position, class, league, g, pts_g, reb_g, ast_g, usg, a_to, efg, ts, ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40 FROM ncaa_players_d1_male WHERE ${whereParts.join(" AND ")} ORDER BY ${safeMetric} DESC LIMIT ${safeLimit};`,
+    `[agentTools.getTopPlayersByMetric] sql=SELECT unique_id, name_split, team, position, class, league, g, psp, c_3pe, fgs, a_to, dsi FROM ncaa_players_d1_male WHERE ${whereParts.join(" AND ")} ORDER BY ${safeMetric} DESC LIMIT ${safeLimit};`,
   );
 
   let supabaseQuery = supabase
     .from("ncaa_players_d1_male")
-    .select("unique_id, name_split, team, position, class, league, g, pts_g, reb_g, ast_g, usg, a_to, efg, ts, ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40")
+    .select("unique_id, name_split, team, position, class, league, g, psp, c_3pe, fgs, a_to, dsi")
     .not("name_split", "is", null)
     .neq("name_split", "")
     .gte("g", safeMinGames)
@@ -345,10 +441,21 @@ export const getTopPlayersByPosition = async ({
       if (b.eliteCount !== a.eliteCount) {
         return b.eliteCount - a.eliteCount;
       }
-      if (Number(b.ts) !== Number(a.ts)) {
-        return Number(b.ts) - Number(a.ts);
+      if (
+        Number.isFinite(Number(b.psp)) &&
+        Number.isFinite(Number(a.psp)) &&
+        Number(b.psp) !== Number(a.psp)
+      ) {
+        return Number(b.psp) - Number(a.psp);
       }
-      return Number(b.ppp) - Number(a.ppp);
+      if (
+        Number.isFinite(Number(b.dsi)) &&
+        Number.isFinite(Number(a.dsi)) &&
+        Number(b.dsi) !== Number(a.dsi)
+      ) {
+        return Number(b.dsi) - Number(a.dsi);
+      }
+      return 0;
     })
     .slice(0, safeLimit);
 
