@@ -157,13 +157,6 @@ function downloadChartAsCsv(data, fileBaseName, comparisonPlayer) {
   );
 }
 
-function formatPercentageStat(value) {
-  if (value === null || value === undefined) return null;
-  const num = Number(value);
-  if (!Number.isFinite(num)) return null;
-  return Number((num * 100).toFixed(1));
-}
-
 function formatNumericStat(value) {
   if (value === null || value === undefined) return null;
   const num = Number(value);
@@ -171,49 +164,60 @@ function formatNumericStat(value) {
   return Number(num.toFixed(1));
 }
 
-function ShootingEfficiencyChart({ player, comparisonPlayer }) {
+function formatPercentLikeStat(value) {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  const normalized = num <= 1 ? num * 100 : num;
+  return Number(normalized.toFixed(1));
+}
+
+function ArchetypeMetricsChart({ player, comparisonPlayer }) {
   const data = [
     {
-      name: "FG%",
-      primary: formatPercentageStat(player.fg),
+      name: "PSP",
+      tooltip: "Pure Scoring Prowess",
+      primary: formatNumericStat(player.psp),
       comparison: comparisonPlayer
-        ? formatPercentageStat(comparisonPlayer.fg)
+        ? formatNumericStat(comparisonPlayer.psp)
         : null,
+      isPercent: false,
     },
     {
-      name: "3PT%",
-      primary: formatPercentageStat(player.c_3pt),
+      name: "3PE",
+      tooltip: "3 Point Efficiency",
+      primary: formatPercentLikeStat(player.c_3pe),
       comparison: comparisonPlayer
-        ? formatPercentageStat(comparisonPlayer.c_3pt)
+        ? formatPercentLikeStat(comparisonPlayer.c_3pe)
         : null,
+      isPercent: true,
     },
     {
-      name: "2PT%",
-      primary: formatPercentageStat(player.c_2pt),
+      name: "FGS",
+      tooltip: "Floor General Skills",
+      primary: formatNumericStat(player.fgs),
       comparison: comparisonPlayer
-        ? formatPercentageStat(comparisonPlayer.c_2pt)
+        ? formatNumericStat(comparisonPlayer.fgs)
         : null,
+      isPercent: false,
     },
     {
-      name: "FT%",
-      primary: formatPercentageStat(player.ft),
+      name: "DSI",
+      tooltip: "Defensive Statistical Impact",
+      primary: formatNumericStat(player.dsi),
       comparison: comparisonPlayer
-        ? formatPercentageStat(comparisonPlayer.ft)
+        ? formatNumericStat(comparisonPlayer.dsi)
         : null,
+      isPercent: false,
     },
     {
-      name: "eFG%",
-      primary: formatPercentageStat(player.efg),
+      name: "USG%",
+      tooltip: "Usage Rate",
+      primary: formatPercentLikeStat(player.usg),
       comparison: comparisonPlayer
-        ? formatPercentageStat(comparisonPlayer.efg)
+        ? formatPercentLikeStat(comparisonPlayer.usg)
         : null,
-    },
-    {
-      name: "TS%",
-      primary: formatPercentageStat(player.ts),
-      comparison: comparisonPlayer
-        ? formatPercentageStat(comparisonPlayer.ts)
-        : null,
+      isPercent: true,
     },
   ].filter((item) => item.primary !== null || item.comparison !== null);
 
@@ -221,16 +225,14 @@ function ShootingEfficiencyChart({ player, comparisonPlayer }) {
 
   const primaryLabel = player.name_split || "Player";
   const comparisonLabel = comparisonPlayer?.name_split || "Comparison Player";
-  const chartId = `chart-shooting-${safeFileName(player.unique_id || player.name_split)}`;
-  const fileBaseName = `${safeFileName(player.name_split)}-shooting-efficiency`;
+  const chartId = `chart-archetype-${safeFileName(player.unique_id || player.name_split)}`;
+  const fileBaseName = `${safeFileName(player.name_split)}-archetype-metrics`;
 
   return (
     <div className="player-chart-card">
       <div className="player-chart-header">
-        <h4>Shooting Efficiency Profile</h4>
-        <span className="player-chart-meta">
-          Percentage-based metrics (side-by-side when comparing)
-        </span>
+        <h4>Core Archetype Metrics</h4>
+        <span className="player-chart-meta">PSP, 3PE, FGS, DSI, and USG%</span>
       </div>
       <div className="player-chart-actions">
         <button
@@ -268,9 +270,7 @@ function ShootingEfficiencyChart({ player, comparisonPlayer }) {
               tickLine={{ stroke: "var(--line)" }}
             />
             <YAxis
-              unit="%"
               domain={[0, 100]}
-              tickFormatter={(value) => `${value}`}
               tick={{ fill: "var(--muted)", fontSize: 12 }}
               axisLine={{ stroke: "var(--line)" }}
               tickLine={{ stroke: "var(--line)" }}
@@ -283,7 +283,9 @@ function ShootingEfficiencyChart({ player, comparisonPlayer }) {
                 if (value == null) {
                   return ["N/A", label];
                 }
-                return [`${Number(value).toFixed(1)}%`, label];
+                const isPercent = Boolean(props?.payload?.isPercent);
+                const formatted = `${Number(value).toFixed(1)}${isPercent ? "%" : ""}`;
+                return [formatted, label];
               }}
               labelStyle={{ fontWeight: 600 }}
               contentStyle={{
@@ -321,39 +323,16 @@ function ShootingEfficiencyChart({ player, comparisonPlayer }) {
   );
 }
 
-function UsagePlaymakingChart({ player, comparisonPlayer }) {
+function AroundTheRimChart({ player, comparisonPlayer }) {
   const data = [
     {
-      name: "USG%",
-      tooltip: "Usage rate",
-      primary: formatPercentageStat(player.usg),
+      name: "ATR",
+      tooltip: "Around The Rim",
+      primary: formatNumericStat(player.ram),
       comparison: comparisonPlayer
-        ? formatPercentageStat(comparisonPlayer.usg)
+        ? formatNumericStat(comparisonPlayer.ram)
         : null,
-    },
-    {
-      name: "A/TO",
-      tooltip: "Assist to turnover",
-      primary: formatNumericStat(player.a_to),
-      comparison: comparisonPlayer
-        ? formatNumericStat(comparisonPlayer.a_to)
-        : null,
-    },
-    {
-      name: "TPG",
-      tooltip: "Turnovers per game",
-      primary: formatNumericStat(player.to_g),
-      comparison: comparisonPlayer
-        ? formatNumericStat(comparisonPlayer.to_g)
-        : null,
-    },
-    {
-      name: "PPG",
-      tooltip: "Points per game",
-      primary: formatNumericStat(player.pts_g),
-      comparison: comparisonPlayer
-        ? formatNumericStat(comparisonPlayer.pts_g)
-        : null,
+      isPercent: false,
     },
   ].filter((item) => item.primary !== null || item.comparison !== null);
 
@@ -361,15 +340,15 @@ function UsagePlaymakingChart({ player, comparisonPlayer }) {
 
   const primaryLabel = player.name_split || "Player";
   const comparisonLabel = comparisonPlayer?.name_split || "Comparison Player";
-  const chartId = `chart-usage-${safeFileName(player.unique_id || player.name_split)}`;
-  const fileBaseName = `${safeFileName(player.name_split)}-usage-playmaking`;
+  const chartId = `chart-atr-${safeFileName(player.unique_id || player.name_split)}`;
+  const fileBaseName = `${safeFileName(player.name_split)}-around-the-rim`;
 
   return (
     <div className="player-chart-card">
       <div className="player-chart-header">
-        <h4>Usage & Playmaking</h4>
+        <h4>Around The Rim (ATR)</h4>
         <span className="player-chart-meta">
-          Role and decision-making profile
+          Separate scale for high ATR values
         </span>
       </div>
       <div className="player-chart-actions">
@@ -413,15 +392,14 @@ function UsagePlaymakingChart({ player, comparisonPlayer }) {
               tickLine={{ stroke: "var(--line)" }}
             />
             <Tooltip
-              formatter={(value, _name, entry) => {
-                const dataKey = entry?.dataKey;
+              formatter={(value, _name, props) => {
+                const dataKey = props?.dataKey;
                 const label =
                   dataKey === "primary" ? primaryLabel : comparisonLabel;
                 if (value == null) {
                   return ["N/A", label];
                 }
-                const baseLabel = entry?.payload?.tooltip || "Value";
-                return [Number(value).toFixed(1), `${baseLabel} • ${label}`];
+                return [`${Number(value).toFixed(1)}`, label];
               }}
               labelStyle={{ fontWeight: 600 }}
               contentStyle={{
@@ -464,14 +442,11 @@ export default function PlayerCharts({ player, comparisonPlayer }) {
 
   return (
     <div className="player-charts-grid">
-      <ShootingEfficiencyChart
+      <ArchetypeMetricsChart
         player={player}
         comparisonPlayer={comparisonPlayer}
       />
-      <UsagePlaymakingChart
-        player={player}
-        comparisonPlayer={comparisonPlayer}
-      />
+      <AroundTheRimChart player={player} comparisonPlayer={comparisonPlayer} />
     </div>
   );
 }
