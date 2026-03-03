@@ -10,7 +10,12 @@ const PLAYER_COLUMNS = `unique_id, name_split, team, position, league, class,
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const CACHE_FILE = path.resolve(__dirname, "../.cache/top90_stats.json");
+const CACHE_ROOT = process.env.CACHE_DIR
+  ? path.resolve(process.env.CACHE_DIR)
+  : process.env.VERCEL
+    ? path.resolve("/tmp/cerebro-cache")
+    : path.resolve(__dirname, "../.cache");
+const CACHE_FILE = path.resolve(CACHE_ROOT, "top90_stats.json");
 const CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 const ELITE_PERCENTILE = 0.9;
 
@@ -134,7 +139,9 @@ const getTopPercentileCache = async ({ minGames = 5 } = {}) => {
   const wrongMinGames = Number(cache?.minGames) !== safeMinGames;
   const missingThresholds =
     !cache?.thresholds ||
-    ELITE_STAT_METRICS.some((metric) => !Number.isFinite(cache.thresholds[metric]));
+    ELITE_STAT_METRICS.some(
+      (metric) => !Number.isFinite(cache.thresholds[metric]),
+    );
 
   if (cache && !stale && !wrongMinGames && !missingThresholds) {
     return cache;
@@ -235,7 +242,11 @@ export const getTopPlayersByMetric = async ({
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 100);
   const safeMinGames = Number(minGames) || 0;
   const safePosition = normalizePositionFilter(position);
-  const whereParts = [`name_split IS NOT NULL`, `name_split <> ''`, `g >= ${safeMinGames}`];
+  const whereParts = [
+    `name_split IS NOT NULL`,
+    `name_split <> ''`,
+    `g >= ${safeMinGames}`,
+  ];
   if (safePosition) whereParts.push(`position ILIKE '%${safePosition}%'`);
   if (team) whereParts.push(`team ILIKE '%${team}%'`);
   console.log(
@@ -244,7 +255,9 @@ export const getTopPlayersByMetric = async ({
 
   let supabaseQuery = supabase
     .from("ncaa_players_d1_male")
-    .select("unique_id, name_split, team, position, class, league, g, pts_g, reb_g, ast_g, usg, a_to, efg, ts, ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40")
+    .select(
+      "unique_id, name_split, team, position, class, league, g, pts_g, reb_g, ast_g, usg, a_to, efg, ts, ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40",
+    )
     .not("name_split", "is", null)
     .neq("name_split", "")
     .gte("g", safeMinGames)
@@ -285,7 +298,11 @@ export const getTopPlayersByPosition = async ({
     Number.isFinite(thresholds[metric]),
   ).map((metric) => `${metric}.gte.${thresholds[metric]}`);
 
-  const whereParts = [`name_split IS NOT NULL`, `name_split <> ''`, `g >= ${safeMinGames}`];
+  const whereParts = [
+    `name_split IS NOT NULL`,
+    `name_split <> ''`,
+    `g >= ${safeMinGames}`,
+  ];
   if (safePosition) whereParts.push(`position ILIKE '%${safePosition}%'`);
   if (team) whereParts.push(`team ILIKE '%${team}%'`);
   if (thresholdFilters.length) {
@@ -299,7 +316,9 @@ export const getTopPlayersByPosition = async ({
 
   let supabaseQuery = supabase
     .from("ncaa_players_d1_male")
-    .select(`unique_id, name_split, team, position, class, league, g, ${METRIC_SELECT_LIST}`)
+    .select(
+      `unique_id, name_split, team, position, class, league, g, ${METRIC_SELECT_LIST}`,
+    )
     .not("name_split", "is", null)
     .neq("name_split", "")
     .gte("g", safeMinGames);
@@ -314,7 +333,9 @@ export const getTopPlayersByPosition = async ({
     supabaseQuery = supabaseQuery.or(thresholdFilters.join(","));
   }
 
-  const { data, error } = await supabaseQuery.limit(Math.max(safeLimit * 5, 25));
+  const { data, error } = await supabaseQuery.limit(
+    Math.max(safeLimit * 5, 25),
+  );
   if (error) {
     throw new Error(`Effective players query failed: ${error.message}`);
   }
@@ -324,7 +345,11 @@ export const getTopPlayersByPosition = async ({
       const eliteMetrics = ELITE_STAT_METRICS.filter((metric) => {
         const threshold = thresholds[metric];
         const value = Number(player?.[metric]);
-        return Number.isFinite(threshold) && Number.isFinite(value) && value >= threshold;
+        return (
+          Number.isFinite(threshold) &&
+          Number.isFinite(value) &&
+          value >= threshold
+        );
       });
       return {
         ...player,
