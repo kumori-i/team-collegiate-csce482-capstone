@@ -53,6 +53,21 @@ router.post("/chat", async (req, res) => {
       sessionId,
       history,
     });
+
+    const haveDataForPlayerCharts = (player) => {
+      if (!player || typeof player !== "object") {
+        return false;
+      }
+
+      const playerChartFields = ["unique_id", "name_split", "psp", "c_3pe", "fgs", "dsi", "usg", "ram"];
+      for (let i = 0; i < playerChartFields.length; i++) {
+        if (!(Object.prototype.hasOwnProperty.call(player, playerChartFields[i]))) {
+          return false;
+        }
+      }
+      return true;
+    };
+
     return res.json({
       reply,
       agent: "chat",
