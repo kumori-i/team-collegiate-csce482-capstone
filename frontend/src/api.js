@@ -74,6 +74,19 @@ export const getPlayer = async (id) => {
   return res.data;
 };
 
+export const getSimilarPlayers = async (
+  id,
+  { limit = 5, portalOnly = true } = {},
+) => {
+  const res = await axios.get(
+    `${API_URL}/players/${encodeURIComponent(id)}/similar`,
+    {
+      params: { limit, portalOnly },
+    },
+  );
+  return res.data;
+};
+
 export const generatePlayerReport = async (player) => {
   const prompt = `Generate a scouting report for ${player.name_split} (${player.position}) on ${player.team}. Focus on role, strengths, weaknesses, and projection.`;
   const res = await axios.post(`${API_URL}/agent/report`, {
