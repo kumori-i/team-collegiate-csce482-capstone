@@ -68,6 +68,18 @@ router.post("/chat", async (req, res) => {
       return true;
     };
 
+    let playerWithCharts;
+    if (toolUsed === "search_players+get_player_by_id") {
+      playerWithCharts = evidence.player;
+    } else {
+      if (toolUsed === "get_player_by_id") {
+        playerWithCharts = evidence;
+      } else {
+        playerWithCharts = evidence.player;
+      }
+    }
+
+
     return res.json({
       reply,
       agent: "chat",
