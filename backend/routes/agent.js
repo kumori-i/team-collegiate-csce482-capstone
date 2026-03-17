@@ -68,22 +68,27 @@ router.post("/chat", async (req, res) => {
       return true;
     };
 
-    let playerWithCharts;
+    let playerToCheck;
     if (toolUsed === "search_players+get_player_by_id") {
-      playerWithCharts = evidence.player;
+      playerToCheck = evidence.player;
     } else {
       if (toolUsed === "get_player_by_id") {
-        playerWithCharts = evidence;
+        playerToCheck = evidence;
       } else {
-        playerWithCharts = evidence.player;
+        playerToCheck = evidence.player;
       }
     }
 
+    let chartPlayer = null;
+    if (haveDataForPlayerCharts(playerToCheck)) {
+      chartPlayer = playerToCheck;
+    }
 
     return res.json({
       reply,
       agent: "chat",
       toolUsed,
+      chartPlayer,
     });
   } catch (err) {
     console.error("Agent chat error:", err);
