@@ -142,6 +142,7 @@ export default function Chat() {
         sender: "Assistant",
         timestamp: new Date().toLocaleTimeString(),
         sources: data.sources || [],
+        chartPlayer: data.chartPlayer || null,
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
@@ -205,6 +206,9 @@ export default function Chat() {
                   ) : (
                     <ReactMarkdown>{message.text}</ReactMarkdown>
                   )}
+                  {message.sender !== "You" && message.chartPlayer ? (
+                    <PlayerCharts player={message.chartPlayer} />
+                  ) : null}
                 </div>
                 {message.sources?.length > 0 ? (
                   <div className="message-sources">
