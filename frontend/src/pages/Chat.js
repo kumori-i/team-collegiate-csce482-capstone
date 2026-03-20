@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { chatWithAgent, resetAgentSession } from "../api";
+import PlayerCharts from "../components/PlayerCharts.js";
 import "./Chat.css";
+import "./PlayerDetails.js";
 
 const CHAT_MESSAGES_STORAGE_KEY = "chatMessagesBySession";
 const MAX_HISTORY_MESSAGES = 20;
