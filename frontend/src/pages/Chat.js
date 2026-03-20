@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { chatWithAgent, resetAgentSession } from "../api";
+import PlayerCharts from "../components/PlayerCharts.js";
 import "./Chat.css";
+import "./PlayerDetails.js";
 
 const CHAT_MESSAGES_STORAGE_KEY = "chatMessagesBySession";
 const MAX_HISTORY_MESSAGES = 20;
@@ -142,6 +144,7 @@ export default function Chat() {
         sender: "Assistant",
         timestamp: new Date().toLocaleTimeString(),
         sources: data.sources || [],
+        chartPlayer: data.chartPlayer || null,
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
@@ -205,6 +208,9 @@ export default function Chat() {
                   ) : (
                     <ReactMarkdown>{message.text}</ReactMarkdown>
                   )}
+                  {message.sender !== "You" && message.chartPlayer ? (
+                    <PlayerCharts player={message.chartPlayer} />
+                  ) : null}
                 </div>
                 {message.sources?.length > 0 ? (
                   <div className="message-sources">
