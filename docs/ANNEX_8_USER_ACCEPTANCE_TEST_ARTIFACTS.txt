@@ -1,0 +1,384 @@
+ANNEX 8: USER ACCEPTANCE TEST ARTIFACTS
+
+Project: CerebroChat
+Purpose: This annex contains the complete set of artifacts used in the user acceptance test (UAT) process for the CerebroChat system.
+
+====================================================================
+1. INTRODUCTION
+====================================================================
+
+User Acceptance Testing was performed to confirm that CerebroChat meets the needs of its intended users. The purpose of UAT was to validate that the system is usable, understandable, and functionally appropriate for basketball-focused workflows such as player search, scouting review, archetype interpretation, and chat-based data queries.
+
+This annex collects the artifacts that support the UAT process, including:
+
+- UAT plan
+- participant profile form
+- test session setup
+- UAT scenarios
+- task script
+- observation sheet
+- feedback form
+- issue log
+- results summary
+- sign-off template
+
+====================================================================
+2. UAT PLAN
+====================================================================
+
+2.1 UAT Objective
+
+The objective of UAT was to determine whether target users could successfully operate the CerebroChat system and complete key tasks without developer intervention.
+
+2.2 UAT Scope
+
+Included in UAT:
+
+- login and access
+- navigation
+- player search
+- player detail review
+- archetype interpretation
+- AI chat usage
+- similar-player requests
+- report generation
+
+Not emphasized in UAT:
+
+- backend code-level diagnostics
+- stress testing
+- low-level API schema validation
+
+2.3 UAT Success Criteria
+
+The system is considered acceptable if:
+
+- users can complete core tasks successfully,
+- the interface is understandable,
+- generated outputs are useful to the target user,
+- major blockers are not present,
+- participants report that the system supports intended basketball analysis tasks.
+
+====================================================================
+3. PARTICIPANT PROFILE ARTIFACT
+====================================================================
+
+Artifact Name: UAT Participant Information Sheet
+
+Template:
+
+Participant ID:
+Role:
+Experience with basketball analytics:
+Experience with web applications:
+Date of session:
+Device used:
+Browser used:
+
+Example roles:
+
+- coach
+- recruiting staff member
+- analyst
+- student evaluator
+- instructor
+
+====================================================================
+4. TEST SESSION SETUP ARTIFACT
+====================================================================
+
+Artifact Name: UAT Environment Checklist
+
+Checklist:
+
+- Frontend is running
+- Backend is running
+- Database connection is active
+- AI provider is configured
+- Test user account is available
+- Browser cache is cleared if needed
+- Internet connection is stable
+- Required sample player records are available
+
+Session setup record template:
+
+Session ID:
+Date:
+Facilitator:
+Tester:
+Frontend status:
+Backend status:
+Database status:
+AI status:
+Notes:
+
+====================================================================
+5. UAT TASK SCENARIOS
+====================================================================
+
+Artifact Name: UAT Scenario Set
+
+Scenario UAT-01
+Title: User signs in and reaches the home page
+Goal: Confirm that the user can access the system
+Expected Outcome: User reaches the authenticated home page
+
+Scenario UAT-02
+Title: User searches for a player
+Goal: Confirm that a user can locate player records
+Expected Outcome: Relevant player search results are returned
+
+Scenario UAT-03
+Title: User opens a player details page
+Goal: Confirm that the user can inspect player details
+Expected Outcome: Player metrics, charts, and archetypes are displayed
+
+Scenario UAT-04
+Title: User identifies a player's archetypes
+Goal: Confirm that archetype information is understandable and available
+Expected Outcome: User can view or ask for archetypes successfully
+
+Scenario UAT-05
+Title: User asks the chat to explain an archetype
+Goal: Confirm that the assistant can explain archetype meaning
+Expected Outcome: Chat returns a useful definition of the archetype
+
+Scenario UAT-06
+Title: User asks for similar players
+Goal: Confirm that conversational similarity workflow is usable
+Expected Outcome: Chat returns a list of similar players
+
+Scenario UAT-07
+Title: User asks for transferable/portal-available similar players
+Goal: Confirm that transfer-related language is correctly handled
+Expected Outcome: Returned players satisfy the transfer-availability intent
+
+Scenario UAT-08
+Title: User generates a scouting report
+Goal: Confirm that report generation is useful and understandable
+Expected Outcome: A readable report is produced with useful player information
+
+Scenario UAT-09
+Title: User resets chat and starts over
+Goal: Confirm that session reset works
+Expected Outcome: Prior context does not interfere with the next task
+
+====================================================================
+6. UAT TASK SCRIPT
+====================================================================
+
+Artifact Name: Facilitator Task Script
+
+Instructions to participant:
+
+1. Sign in to the system.
+2. Navigate to the Search page.
+3. Search for a player by name.
+4. Open the player's details page.
+5. Review the listed archetypes.
+6. Open the Chat page.
+7. Ask, "What is a Modern Big?"
+8. Ask for a specific player's archetypes.
+9. Ask for similar players to that player.
+10. Ask for similar players who are transferable or in the transfer portal.
+11. Return to the player details page and generate a scouting report.
+12. Reset the chat and log out.
+
+Facilitator notes:
+
+- Do not assist unless the participant is blocked.
+- Record hesitation, confusion, and misinterpretation.
+- Record whether the participant completes each task independently.
+
+====================================================================
+7. OBSERVATION SHEET ARTIFACT
+====================================================================
+
+Artifact Name: UAT Observation Sheet
+
+Template:
+
+Participant ID:
+Scenario ID:
+Task completed: Yes / No
+Time to completion:
+Number of prompts/help requests:
+Observed issues:
+Observed confusion points:
+Comments:
+
+Recommended observation categories:
+
+- navigation confusion
+- terminology confusion
+- response quality issue
+- performance issue
+- missing expected feature
+- misleading output
+
+====================================================================
+8. USER FEEDBACK FORM ARTIFACT
+====================================================================
+
+Artifact Name: UAT Feedback Form
+
+Questions:
+
+1. Was the system easy to navigate?
+2. Was the player search process easy to understand?
+3. Were the player details useful?
+4. Were the archetype labels and explanations understandable?
+5. Was the chat feature helpful?
+6. Were the similar-player suggestions useful?
+7. Was the scouting report useful?
+8. Did the system behave as you expected?
+9. What was the most useful feature?
+10. What should be improved?
+
+Suggested rating scale:
+
+1 = Strongly disagree
+2 = Disagree
+3 = Neutral
+4 = Agree
+5 = Strongly agree
+
+Open response fields:
+
+- Most useful part:
+- Least useful part:
+- Suggested improvement:
+- Additional comments:
+
+====================================================================
+9. ISSUE LOG ARTIFACT
+====================================================================
+
+Artifact Name: UAT Issue Log
+
+Template:
+
+Issue ID:
+Date:
+Reported by:
+Scenario:
+Description:
+Severity: Low / Medium / High
+Status: Open / Fixed / Deferred
+Resolution notes:
+
+Example issue categories:
+
+- incorrect chat routing
+- misleading archetype response
+- player not found when expected
+- transfer-availability filter misunderstanding
+- report generation failure
+- navigation or UI clarity issue
+
+====================================================================
+10. UAT RESULTS SUMMARY ARTIFACT
+====================================================================
+
+Artifact Name: UAT Results Summary
+
+Summary template:
+
+Number of participants:
+Number of sessions:
+Scenarios completed successfully:
+Scenarios requiring help:
+High-severity issues:
+Medium-severity issues:
+Low-severity issues:
+Overall acceptance decision:
+
+Suggested acceptance decision values:
+
+- Accepted
+- Accepted with minor revisions
+- Requires revision before acceptance
+
+Example summary narrative:
+
+Participants were able to complete the main user flows of sign-in, player search, player detail review, and chat interaction. The most valuable features were player search and AI-generated summaries. The most common issues involved interpretation of transfer-related phrasing and edge cases in conversational queries. No blocking issues remained after revisions.
+
+====================================================================
+11. SIGN-OFF ARTIFACT
+====================================================================
+
+Artifact Name: UAT Sign-Off Sheet
+
+Template:
+
+Project Name:
+Test Cycle:
+Date:
+Reviewed by:
+Role:
+Acceptance Decision:
+Comments:
+Signature:
+
+Possible sign-off statement:
+
+"I have reviewed the user acceptance test results for CerebroChat and find the system acceptable for its intended academic project use, subject to the issues and notes recorded in the UAT summary."
+
+====================================================================
+12. SAMPLE COMPLETED UAT RECORD
+====================================================================
+
+Participant ID: UAT-P01
+Role: Student evaluator
+Experience with basketball analytics: Intermediate
+Experience with web applications: High
+Date of session: __________
+Device used: Laptop
+Browser used: Chrome
+
+Scenario outcomes:
+
+- UAT-01: Pass
+- UAT-02: Pass
+- UAT-03: Pass
+- UAT-04: Pass
+- UAT-05: Pass
+- UAT-06: Pass
+- UAT-07: Pass with clarification
+- UAT-08: Pass
+- UAT-09: Pass
+
+Observed notes:
+
+- Search flow was easy to understand.
+- Archetype explanation was useful.
+- Similar-player chat flow was helpful after player identity was established.
+- Transfer-related language required refinement during development.
+
+Overall participant feedback:
+
+- System usefulness rating: 4/5
+- Ease of use rating: 4/5
+- Chat usefulness rating: 4/5
+- Recommended for intended project use: Yes
+
+====================================================================
+13. HOW THESE ARTIFACTS WERE USED
+====================================================================
+
+The UAT artifacts in this annex were used to:
+
+- prepare each test session,
+- standardize participant instructions,
+- record observed usability and workflow issues,
+- collect participant ratings and comments,
+- summarize overall acceptance status,
+- document approval or requested revisions.
+
+====================================================================
+14. CONCLUSION
+====================================================================
+
+This annex provides the complete set of user acceptance testing artifacts used to evaluate whether CerebroChat is acceptable for its intended end users. These materials support repeatable testing, consistent documentation, and evidence-based acceptance decisions.
+
+End of Annex 8

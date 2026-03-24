@@ -49,7 +49,7 @@ router.post("/chat", async (req, res) => {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const { reply, toolUsed } = await runChatAgent(message, {
+    const { reply, toolUsed, chartSpec } = await runChatAgent(message, {
       sessionId,
       history,
     });
@@ -57,6 +57,7 @@ router.post("/chat", async (req, res) => {
       reply,
       agent: "chat",
       toolUsed,
+      chartSpec,
     });
   } catch (err) {
     console.error("Agent chat error:", err);

@@ -188,6 +188,187 @@ const detectSimilarPlayersIntent = (message = "") => {
   return { limit, portalState, portalConstraintExplicit };
 };
 
+const CHART_METRIC_DEFINITIONS = {
+  pts_g: { label: "PPG", percentLike: false },
+  reb_g: { label: "RPG", percentLike: false },
+  ast_g: { label: "APG", percentLike: false },
+  stl_g: { label: "SPG", percentLike: false },
+  blk_g: { label: "BPG", percentLike: false },
+  fg: { label: "FG%", percentLike: true },
+  c_3pt: { label: "3PT%", percentLike: true },
+  ft: { label: "FT%", percentLike: true },
+  efg: { label: "eFG%", percentLike: true },
+  ts: { label: "TS%", percentLike: true },
+  usg: { label: "USG%", percentLike: true },
+  ppp: { label: "PPP", percentLike: false },
+  a_to: { label: "A/TO", percentLike: false },
+  orb_40: { label: "ORB/40", percentLike: false },
+  ram: { label: "ATR", percentLike: false },
+  c_ram: { label: "cRAM", percentLike: false },
+  psp: { label: "PSP", percentLike: false },
+  c_3pe: { label: "3PE", percentLike: true },
+  dsi: { label: "DSI", percentLike: false },
+  fgs: { label: "FGS", percentLike: false },
+  bms: { label: "BMS", percentLike: false },
+};
+
+const CHART_METRIC_ALIASES = {
+  pts_g: ["pts_g", "ppg", "points per game", "points", "scoring"],
+  reb_g: ["reb_g", "rpg", "rgp", "rebounds per game", "rebounds", "boards"],
+  ast_g: ["ast_g", "apg", "assists per game", "assists"],
+  stl_g: ["stl_g", "spg", "steals per game", "steals"],
+  blk_g: ["blk_g", "bpg", "blocks per game", "blocks"],
+  fg: ["fg", "fg%", "field goal", "field goal percentage"],
+  c_3pt: [
+    "c_3pt",
+    "3pt",
+    "3pt%",
+    "3-point percentage",
+    "three point percentage",
+  ],
+  ft: ["ft", "ft%", "free throw", "free throw percentage"],
+  efg: ["efg", "effective field goal", "effective fg"],
+  ts: ["ts", "true shooting", "true shooting percentage"],
+  usg: ["usg", "usg%", "usage", "usage rate"],
+  ppp: ["ppp", "points per possession"],
+  a_to: ["a_to", "a/to", "assist to turnover", "assist-to-turnover"],
+  orb_40: ["orb_40", "offensive rebound rate", "orb per 40"],
+  ram: ["ram", "atr", "around the rim"],
+  c_ram: ["c_ram", "cram"],
+  psp: ["psp"],
+  c_3pe: ["c_3pe", "3pe"],
+  dsi: ["dsi"],
+  fgs: ["fgs"],
+  bms: ["bms"],
+};
+
+const escapeRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const extractMetricsFromMessageText = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  if (!text) return [];
+
+  const matches = [];
+  for (const [metric, aliases] of Object.entries(CHART_METRIC_ALIASES)) {
+    const found = aliases.some((alias) =>
+      new RegExp(`(^|[^a-z0-9])${escapeRegex(alias)}([^a-z0-9]|$)`).test(text),
+    );
+    if (found) {
+      matches.push(metric);
+    }
+  }
+  return [...new Set(matches)];
+};
+
+const detectChartIntent = (message = "") =>
+  /\bchart\b|\bcharts\b|\bgraph\b|\bplot\b|\bvisualize\b|\bvisualization\b|\bradar\b/.test(
+    String(message || "").toLowerCase(),
+  );
+
+const extractChartRequest = async (message, { historyText = "None" } = {}) => {
+  if (!message?.trim()) {
+    return null;
+  }
+
+  const prompt = `Extract chart request fields from this basketball request.
+Return ONLY valid JSON with this exact schema:
+{
+  "playerName": "",
+  "team": "",
+  "position": "",
+  "metrics": []
+}
+
+Rules:
+- If a field is unknown, return empty string.
+- metrics must be an array of metric keys from this allowlist only:
+  pts_g, reb_g, ast_g, stl_g, blk_g, fg, c_3pt, ft, efg, ts, usg, ppp, a_to, orb_40, ram, c_ram, psp, c_3pe, dsi, fgs, bms
+- If the user says ATR, map it to ram.
+- If the user says 3PE, map it to c_3pe.
+- If the user says 3PT or 3-point percentage, map it to c_3pt.
+- If the user asks for archetype metrics or core archetype metrics, use:
+  ["psp", "c_3pe", "fgs", "dsi", "usg"]
+- If no explicit metrics are provided but a chart is requested, return an empty metrics array.
+
+Request:
+Conversation context:
+${historyText}
+
+Latest user request:
+${message}`;
+
+  const raw = await generateWithProvider(prompt);
+  const parsed = parseJsonFromModel(raw);
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  return {
+    playerName:
+      typeof parsed.playerName === "string" ? parsed.playerName.trim() : "",
+    team: typeof parsed.team === "string" ? parsed.team.trim() : "",
+    position: typeof parsed.position === "string" ? parsed.position.trim() : "",
+    metrics: [
+      ...(Array.isArray(parsed.metrics)
+        ? parsed.metrics
+            .map((metric) => String(metric || "").trim())
+            .filter((metric) => metric in CHART_METRIC_DEFINITIONS)
+        : []),
+      ...extractMetricsFromMessageText(message),
+    ].filter((metric, index, array) => array.indexOf(metric) === index),
+  };
+};
+
+const formatChartMetricValue = (metric, value) => {
+  const definition = CHART_METRIC_DEFINITIONS[metric];
+  const num = Number(value);
+  if (!definition || !Number.isFinite(num)) {
+    return null;
+  }
+  if (definition.percentLike) {
+    return num <= 1 ? Number((num * 100).toFixed(1)) : Number(num.toFixed(1));
+  }
+  return Number(num.toFixed(1));
+};
+
+const buildChatChartSpec = (player, metrics = []) => {
+  if (!player || !Array.isArray(metrics) || metrics.length === 0) {
+    return null;
+  }
+
+  const chartMetrics = metrics
+    .map((metric) => {
+      const definition = CHART_METRIC_DEFINITIONS[metric];
+      if (!definition) return null;
+      const value = formatChartMetricValue(metric, player?.[metric]);
+      if (value === null) return null;
+      return {
+        key: metric,
+        label: definition.label,
+        value,
+        percentLike: definition.percentLike,
+      };
+    })
+    .filter(Boolean);
+
+  if (!chartMetrics.length) {
+    return null;
+  }
+
+  return {
+    title: `${player.name_split || "Player"} Metric Chart`,
+    subtitle: chartMetrics.map((metric) => metric.label).join(", "),
+    player: {
+      unique_id: player.unique_id,
+      name_split: player.name_split,
+      team: player.team,
+      position: player.position,
+    },
+    metrics: chartMetrics,
+  };
+};
+
 const isContextualReportReference = (message = "") => {
   const text = String(message).toLowerCase();
   return (
@@ -792,6 +973,110 @@ export const runChatAgent = async (
       message,
     );
 
+  if (detectChartIntent(message)) {
+    const chartRequest = await extractChartRequest(message, { historyText });
+    const chartTargetName =
+      chartRequest?.playerName ||
+      getSessionPlayer(safeSessionId)?.name_split ||
+      "";
+
+    if (!chartTargetName) {
+      return {
+        reply:
+          "I can generate a chart, but I need a specific player name and at least one metric.",
+        toolUsed: "none",
+        evidence: null,
+        chartSpec: null,
+      };
+    }
+
+    const requestedMetrics =
+      chartRequest?.metrics && chartRequest.metrics.length > 0
+        ? chartRequest.metrics
+        : ["psp", "c_3pe", "fgs", "dsi", "usg"];
+
+    const toolResult = await resolvePlayerSearchForChat({
+      query: chartTargetName,
+      team: chartRequest?.team || "",
+      position: chartRequest?.position || "",
+      limit: 10,
+    });
+
+    if (
+      toolResult.tool === "search_players+get_player_by_id" &&
+      toolResult.result?.player
+    ) {
+      const player = toolResult.result.player;
+      const chartSpec = buildChatChartSpec(player, requestedMetrics);
+      setSessionPlayer(safeSessionId, player);
+
+      if (!chartSpec) {
+        return {
+          reply: `I found ${player.name_split}, but I could not build a chart from the requested metrics.`,
+          toolUsed: "search_players+get_player_by_id+chart",
+          evidence: {
+            player: {
+              unique_id: player.unique_id,
+              name_split: player.name_split,
+              team: player.team,
+              position: player.position,
+            },
+            metrics: requestedMetrics,
+          },
+          chartSpec: null,
+        };
+      }
+
+      return {
+        reply: `Here is a chart for ${player.name_split} using ${chartSpec.metrics.map((metric) => metric.label).join(", ")}.`,
+        toolUsed: "search_players+get_player_by_id+chart",
+        evidence: {
+          player: {
+            unique_id: player.unique_id,
+            name_split: player.name_split,
+            team: player.team,
+            position: player.position,
+          },
+          metrics: chartSpec.metrics.map((metric) => metric.key),
+        },
+        chartSpec,
+      };
+    }
+
+    if (
+      toolResult.tool === "search_players" &&
+      (toolResult.result?.ambiguity === "duplicate_exact_name" ||
+        toolResult.result?.ambiguity === "similar_name_candidates")
+    ) {
+      const candidates = toolResult.result.candidates || [];
+      const candidateSummary = candidates
+        .slice(0, 5)
+        .map(
+          (p, idx) =>
+            `${idx + 1}. ${p.name_split} - ${p.team || "Unknown team"} (${p.position || "N/A"}) [id: ${p.unique_id}]`,
+        )
+        .join("\n");
+
+      return {
+        reply:
+          toolResult.result.ambiguity === "duplicate_exact_name"
+            ? `I found multiple players with the exact name "${toolResult.result.query}". Please clarify which one you want charted:\n${candidateSummary}\n\nYou can reply with the player id, team, or position.`
+            : `I couldn't find an exact name match for "${toolResult.result.query}", but I found similar players:\n${candidateSummary}\n\nWhich player did you want charted? You can reply with the player id, team, or position.`,
+        toolUsed: toolResult.tool,
+        evidence: toolResult.result,
+        chartSpec: null,
+      };
+    }
+
+    return {
+      reply:
+        "I could not find that player well enough to generate a chart. Please give the full player name.",
+      toolUsed: toolResult.tool,
+      evidence: toolResult.result,
+      chartSpec: null,
+    };
+  }
+
   if (reportIntent) {
     const rememberedPlayer =
       isContextualReportReference(message) && safeSessionId
@@ -854,6 +1139,7 @@ export const runChatAgent = async (
               value: player?.[metric] ?? null,
             })),
           },
+          chartSpec: null,
         };
       }
     }
@@ -949,6 +1235,7 @@ export const runChatAgent = async (
               position: player.position,
             })),
           },
+          chartSpec: null,
         };
       }
 
@@ -1020,6 +1307,7 @@ export const runChatAgent = async (
             },
             archetypes,
           },
+          chartSpec: null,
         };
       }
 
@@ -1067,6 +1355,7 @@ Return a concise, helpful response.`;
       reply,
       toolUsed: "archetype_context",
       evidence: { archetypes: true },
+      chartSpec: null,
     };
   }
 
@@ -1108,6 +1397,7 @@ If tool result is empty, say there is not enough database evidence and ask a cla
       reply,
       toolUsed: topMetricResult.tool,
       evidence: topMetricResult.result,
+      chartSpec: null,
     };
   }
 
@@ -1149,6 +1439,7 @@ If tool result is empty, say there is not enough database evidence and ask a cla
       reply,
       toolUsed: compositeResult.tool,
       evidence: compositeResult.result,
+      chartSpec: null,
     };
   }
 
@@ -1194,6 +1485,7 @@ If tool result is empty, say there is not enough database evidence and ask a cla
           : `I couldn't find an exact name match for "${toolResult.result.query}", but I found similar players:\n${candidateSummary}\n\nWhich player did you mean? You can reply with the player id, team, or position.`,
       toolUsed: toolResult.tool,
       evidence: toolResult.result,
+      chartSpec: null,
     };
   }
 
@@ -1231,12 +1523,14 @@ Return a concise, helpful response grounded only in the tool result.`;
       reply: `I used "${resolvedName}" as the closest matching player name.\n\n${reply}`,
       toolUsed: toolResult.tool,
       evidence: toolResult.result,
+      chartSpec: null,
     };
   }
   return {
     reply,
     toolUsed: toolResult.tool,
     evidence: toolResult.result,
+    chartSpec: null,
   };
 };
 
