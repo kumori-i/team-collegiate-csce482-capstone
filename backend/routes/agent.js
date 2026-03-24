@@ -49,46 +49,14 @@ router.post("/chat", async (req, res) => {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const { reply, toolUsed, evidence } = await runChatAgent(message, {
+    const { reply, toolUsed } = await runChatAgent(message, {
       sessionId,
       history,
     });
-
-    const haveDataForPlayerCharts = (player) => {
-      if (!player || typeof player !== "object") {
-        return false;
-      }
-
-      const playerChartFields = ["unique_id", "name_split", "psp", "c_3pe", "fgs", "dsi", "usg", "ram"];
-      for (let i = 0; i < playerChartFields.length; i++) {
-        if (!(Object.prototype.hasOwnProperty.call(player, playerChartFields[i]))) {
-          return false;
-        }
-      }
-      return true;
-    };
-
-    let playerToCheck;
-    if (toolUsed === "search_players+get_player_by_id") {
-      playerToCheck = evidence.player;
-    } else {
-      if (toolUsed === "get_player_by_id") {
-        playerToCheck = evidence;
-      } else {
-        playerToCheck = evidence.player;
-      }
-    }
-
-    let chartPlayer = null;
-    if (haveDataForPlayerCharts(playerToCheck)) {
-      chartPlayer = playerToCheck;
-    }
-
     return res.json({
       reply,
       agent: "chat",
       toolUsed,
-      chartPlayer,
     });
   } catch (err) {
     console.error("Agent chat error:", err);
