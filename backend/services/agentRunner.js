@@ -266,6 +266,43 @@ const detectChartIntent = (message = "") =>
     String(message || "").toLowerCase(),
   );
 
+const cleanExtractedPlayerName = (value = "") =>
+  String(value || "")
+    .replace(/\b(his|her|their)\b.*$/i, "")
+    .replace(
+      /\bfor\s+(?:apg|ppg|rpg|rgp|bpg|spg|pts_g|reb_g|ast_g|stl_g|blk_g)\b.*$/i,
+      "",
+    )
+    .replace(
+      /\b(with|using|via|showing|including|that has|which has)\b.*$/i,
+      "",
+    )
+    .replace(/['’]s\b.*$/i, "")
+    .replace(/[,.!?]+$/g, "")
+    .trim();
+
+const extractChartPlayerNameFromMessage = (message = "") => {
+  const text = String(message || "").trim();
+  if (!text) return "";
+
+  const patterns = [
+    /\b(?:chart|graph|plot|visualization|visualize)\s+for\s+(.+?)$/i,
+    /\bfor\s+(.+?)\s+(?:with|using|via|showing|including)\b/i,
+    /\bfor\s+(.+?)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match?.[1]) continue;
+    const candidate = cleanExtractedPlayerName(match[1]);
+    if (candidate && tokenizeName(candidate).length >= 2) {
+      return candidate;
+    }
+  }
+
+  return "";
+};
+
 const extractChartRequest = async (
   message,
   { historyText = "None", userId = "" } = {},
@@ -1000,8 +1037,16 @@ export const runChatAgent = async (
       historyText,
       userId,
     });
+    const extractedTarget = await extractPlayerLookupTarget(message, {
+      historyText,
+      userId,
+    });
+    const deterministicChartTarget = extractChartPlayerNameFromMessage(message);
+    const deterministicMetrics = extractMetricsFromMessageText(message);
     const chartTargetName =
+      deterministicChartTarget ||
       chartRequest?.playerName ||
+      extractedTarget?.playerName ||
       getSessionPlayer(safeSessionId)?.name_split ||
       "";
 
@@ -1018,12 +1063,14 @@ export const runChatAgent = async (
     const requestedMetrics =
       chartRequest?.metrics && chartRequest.metrics.length > 0
         ? chartRequest.metrics
-        : ["psp", "c_3pe", "fgs", "dsi", "usg"];
+        : deterministicMetrics.length > 0
+          ? deterministicMetrics
+          : ["psp", "c_3pe", "fgs", "dsi", "usg"];
 
     const toolResult = await resolvePlayerSearchForChat({
       query: chartTargetName,
-      team: chartRequest?.team || "",
-      position: chartRequest?.position || "",
+      team: chartRequest?.team || extractedTarget?.team || "",
+      position: chartRequest?.position || extractedTarget?.position || "",
       limit: 10,
     });
 
