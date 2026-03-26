@@ -4,14 +4,16 @@ import "./App.css";
 import Login from "./components/Login";
 import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { getValidStoredToken } from "./auth";
 import Home from "./pages/Home";
 import Search from "./pages/Search";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
+import CostDashboard from "./pages/CostDashboard";
 import PlayerDetails from "./pages/PlayerDetails";
 
 function App() {
-  const isAuthenticated = !!localStorage.getItem("token");
+  const isAuthenticated = !!getValidStoredToken();
   const [theme, setTheme] = useState(() => {
     const stored = localStorage.getItem("theme");
     return stored || "light";
@@ -100,7 +102,7 @@ function App() {
             path="/chat"
             element={
               <ProtectedRoute>
-                <Chat />
+                <Chat onLogout={handleLogout} />
               </ProtectedRoute>
             }
           />
@@ -110,6 +112,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Profile onLogout={handleLogout} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/cost-dashboard"
+            element={
+              <ProtectedRoute>
+                <CostDashboard onLogout={handleLogout} />
               </ProtectedRoute>
             }
           />

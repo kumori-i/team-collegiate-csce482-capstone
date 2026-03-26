@@ -15,6 +15,11 @@ export default function Navbar({ user, onLogout, theme, onToggleTheme }) {
     navigate("/profile");
   };
 
+  const handleViewCostDashboard = () => {
+    setShowProfileMenu(false);
+    navigate("/cost-dashboard");
+  };
+
   const handleLogout = () => {
     setShowProfileMenu(false);
     onLogout();
@@ -92,6 +97,12 @@ export default function Navbar({ user, onLogout, theme, onToggleTheme }) {
             <div className="profile-menu">
               <button onClick={handleViewProfile} className="profile-menu-item">
                 View Profile
+              </button>
+              <button
+                onClick={handleViewCostDashboard}
+                className="profile-menu-item"
+              >
+                Cost Dashboard
               </button>
               <button onClick={handleLogout} className="profile-menu-item">
                 Logout

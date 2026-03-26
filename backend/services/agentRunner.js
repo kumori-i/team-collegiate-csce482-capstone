@@ -266,7 +266,10 @@ const detectChartIntent = (message = "") =>
     String(message || "").toLowerCase(),
   );
 
-const extractChartRequest = async (message, { historyText = "None" } = {}) => {
+const extractChartRequest = async (
+  message,
+  { historyText = "None", userId = "" } = {},
+) => {
   if (!message?.trim()) {
     return null;
   }
@@ -298,7 +301,11 @@ ${historyText}
 Latest user request:
 ${message}`;
 
-  const raw = await generateWithProvider(prompt);
+  const raw = await generateWithProvider(prompt, {
+    userId,
+    route: "/api/agent/chat",
+    feature: "chart_request_extraction",
+  });
   const parsed = parseJsonFromModel(raw);
   if (!parsed || typeof parsed !== "object") {
     return null;
@@ -763,7 +770,10 @@ const resolvePlayerSearchForChat = async (args = {}) => {
   return { tool: "search_players", result: matches };
 };
 
-const extractReportTarget = async (message, { historyText = "None" } = {}) => {
+const extractReportTarget = async (
+  message,
+  { historyText = "None", userId = "" } = {},
+) => {
   if (!message?.trim()) {
     return null;
   }
@@ -790,7 +800,11 @@ ${historyText}
 Latest user request:
 ${message}`;
 
-  const raw = await generateWithProvider(prompt);
+  const raw = await generateWithProvider(prompt, {
+    userId,
+    route: "/api/agent/report",
+    feature: "report_target_extraction",
+  });
   const parsed = parseJsonFromModel(raw);
   if (!parsed || typeof parsed !== "object") {
     return null;
@@ -806,7 +820,7 @@ ${message}`;
 
 const extractPlayerLookupTarget = async (
   message,
-  { historyText = "None" } = {},
+  { historyText = "None", userId = "" } = {},
 ) => {
   if (!message?.trim()) {
     return null;
@@ -832,7 +846,11 @@ ${historyText}
 Latest user request:
 ${message}`;
 
-  const raw = await generateWithProvider(prompt);
+  const raw = await generateWithProvider(prompt, {
+    userId,
+    route: "/api/agent/chat",
+    feature: "player_lookup_extraction",
+  });
   const parsed = parseJsonFromModel(raw);
   if (!parsed || typeof parsed !== "object") {
     return null;
@@ -848,7 +866,7 @@ ${message}`;
 
 export const decideChatTool = async (
   message,
-  { historyText = "None" } = {},
+  { historyText = "None", userId = "" } = {},
 ) => {
   const prompt = `You are a routing agent for basketball database tools.
 Return ONLY valid JSON with this schema:
@@ -884,7 +902,11 @@ ${historyText}
 Latest user message:
 ${message}`;
 
-  const raw = await generateWithProvider(prompt);
+  const raw = await generateWithProvider(prompt, {
+    userId,
+    route: "/api/agent/chat",
+    feature: "tool_routing",
+  });
   const parsed = parseJsonFromModel(raw);
   if (!parsed?.tool) {
     return { tool: "none", args: {} };
@@ -963,7 +985,7 @@ export const runToolPlan = async (plan) => {
 
 export const runChatAgent = async (
   message,
-  { sessionId = "", history = [] } = {},
+  { sessionId = "", history = [], userId = "" } = {},
 ) => {
   const safeSessionId = sanitizeSessionId(sessionId);
   const normalizedHistory = normalizeConversationHistory(history);
@@ -974,7 +996,10 @@ export const runChatAgent = async (
     );
 
   if (detectChartIntent(message)) {
-    const chartRequest = await extractChartRequest(message, { historyText });
+    const chartRequest = await extractChartRequest(message, {
+      historyText,
+      userId,
+    });
     const chartTargetName =
       chartRequest?.playerName ||
       getSessionPlayer(safeSessionId)?.name_split ||
@@ -1086,6 +1111,7 @@ export const runChatAgent = async (
       message,
       playerInput: rememberedPlayer,
       conversationHistoryText: historyText,
+      userId,
     });
     const delegatedPlayer =
       delegated?.evidence?.player ||
@@ -1149,6 +1175,7 @@ export const runChatAgent = async (
   if (similarPlayersIntent) {
     const extractedTarget = await extractPlayerLookupTarget(message, {
       historyText,
+      userId,
     });
     const rememberedPlayer = safeSessionId
       ? getSessionPlayer(safeSessionId)
@@ -1350,7 +1377,11 @@ Conversation context:
 ${historyText}
 
 Return a concise, helpful response.`;
-    const reply = await generateWithProvider(replyPrompt);
+    const reply = await generateWithProvider(replyPrompt, {
+      userId,
+      route: "/api/agent/chat",
+      feature: "archetype_reply",
+    });
     return {
       reply,
       toolUsed: "archetype_context",
@@ -1384,7 +1415,11 @@ Respond with:
 2) a brief reason grounded in the requested metric,
 3) 2-4 close alternatives.
 If tool result is empty, say there is not enough database evidence and ask a clarifying question.`;
-    const reply = await generateWithProvider(replyPrompt);
+    const reply = await generateWithProvider(replyPrompt, {
+      userId,
+      route: "/api/agent/chat",
+      feature: "top_metric_reply",
+    });
     setSessionPlayer(
       safeSessionId,
       extractPrimaryPlayerFromToolResult(topMetricResult),
@@ -1426,7 +1461,11 @@ Respond with:
 2) a brief reason grounded in elite top-percentile stats,
 3) 2-4 close alternatives.
 If tool result is empty, say there is not enough database evidence and ask a clarifying question.`;
-    const reply = await generateWithProvider(replyPrompt);
+    const reply = await generateWithProvider(replyPrompt, {
+      userId,
+      route: "/api/agent/chat",
+      feature: "composite_position_reply",
+    });
     setSessionPlayer(
       safeSessionId,
       extractPrimaryPlayerFromToolResult(compositeResult),
@@ -1443,9 +1482,12 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     };
   }
 
-  let plan = await decideChatTool(message, { historyText });
+  let plan = await decideChatTool(message, { historyText, userId });
   if (plan.tool === "none") {
-    const extracted = await extractReportTarget(message, { historyText });
+    const extracted = await extractReportTarget(message, {
+      historyText,
+      userId,
+    });
     if (extracted?.playerName) {
       plan = {
         tool: "search_players",
@@ -1506,7 +1548,11 @@ ${ARCHETYPE_PROMPT_CONTEXT}
 
 Return a concise, helpful response grounded only in the tool result.`;
 
-  const reply = await generateWithProvider(replyPrompt);
+  const reply = await generateWithProvider(replyPrompt, {
+    userId,
+    route: "/api/agent/chat",
+    feature: "final_reply",
+  });
   setSessionPlayer(
     safeSessionId,
     extractPrimaryPlayerFromToolResult(toolResult),
@@ -1539,6 +1585,7 @@ export const runReportAgent = async ({
   playerInput = null,
   playerId = "",
   conversationHistoryText = "None",
+  userId = "",
 }) => {
   let evidence = {};
   let toolUsed = "none";
@@ -1569,6 +1616,7 @@ export const runReportAgent = async ({
   } else {
     const extracted = await extractReportTarget(message, {
       historyText: conversationHistoryText,
+      userId,
     });
     if (extracted?.playerName) {
       logToolInvocation("search_players", {
@@ -1607,6 +1655,7 @@ export const runReportAgent = async ({
     if (toolUsed === "none") {
       const plan = await decideChatTool(message, {
         historyText: conversationHistoryText,
+        userId,
       });
       const toolResult = await runToolPlan(
         plan.tool === "none"
@@ -1642,7 +1691,11 @@ Required output format:
 
 Use markdown and include specific numbers from evidence where available.`;
 
-  const report = await generateWithProvider(reportPrompt);
+  const report = await generateWithProvider(reportPrompt, {
+    userId,
+    route: "/api/agent/report",
+    feature: "report_generation",
+  });
   return {
     report,
     toolUsed,

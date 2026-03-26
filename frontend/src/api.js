@@ -1,5 +1,6 @@
 // frontend/src/api.js
 import axios from "axios";
+import { getValidStoredToken } from "./auth";
 
 // Use explicit URL if provided, otherwise use proxy
 // If REACT_APP_API_URL is set, use it; otherwise use proxy path
@@ -17,7 +18,7 @@ export const loginWithGoogle = async (idToken) => {
 
 // Get current user profile
 export const getUserProfile = async () => {
-  const token = localStorage.getItem("token");
+  const token = getValidStoredToken();
   const res = await axios.get(`${API_URL}/auth/profile`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -28,7 +29,7 @@ export const getUserProfile = async () => {
 
 // Delete user account
 export const deleteAccount = async () => {
-  const token = localStorage.getItem("token");
+  const token = getValidStoredToken();
   const res = await axios.delete(`${API_URL}/auth/account`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -39,6 +40,7 @@ export const deleteAccount = async () => {
 
 export const chatWithAgent = async (message, history = []) => {
   let sessionId = localStorage.getItem("agentSessionId");
+  const token = getValidStoredToken();
   if (!sessionId) {
     sessionId =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -46,16 +48,33 @@ export const chatWithAgent = async (message, history = []) => {
         : `session-${Date.now()}`;
     localStorage.setItem("agentSessionId", sessionId);
   }
-  const res = await axios.post(`${API_URL}/agent/chat`, {
-    message,
-    sessionId,
-    history,
-  });
+  const res = await axios.post(
+    `${API_URL}/agent/chat`,
+    {
+      message,
+      sessionId,
+      history,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
   return res.data;
 };
 
 export const resetAgentSession = async (sessionId) => {
-  const res = await axios.post(`${API_URL}/agent/reset`, { sessionId });
+  const token = getValidStoredToken();
+  const res = await axios.post(
+    `${API_URL}/agent/reset`,
+    { sessionId },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
   return res.data;
 };
 
@@ -88,19 +107,39 @@ export const getSimilarPlayers = async (
 };
 
 export const generatePlayerReport = async (player) => {
+  const token = getValidStoredToken();
   const prompt = `Generate a scouting report for ${player.name_split} (${player.position}) on ${player.team}. Focus on role, strengths, weaknesses, and projection.`;
-  const res = await axios.post(`${API_URL}/agent/report`, {
-    message: prompt,
-    player,
-  });
+  const res = await axios.post(
+    `${API_URL}/agent/report`,
+    {
+      message: prompt,
+      player,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
   return {
     description: res.data?.report || "",
   };
 };
 
+export const getUsageDashboard = async (days = 14) => {
+  const token = getValidStoredToken();
+  const res = await axios.get(`${API_URL}/usage/dashboard`, {
+    params: { days },
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
+};
+
 // Helper to get auth headers
 export const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
+  const token = getValidStoredToken();
   return {
     headers: {
       Authorization: `Bearer ${token}`,

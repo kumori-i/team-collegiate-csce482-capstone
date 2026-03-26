@@ -74,7 +74,7 @@ const toAgentHistory = (messages) =>
     }))
     .filter((item) => item.content.trim().length > 0);
 
-export default function Chat() {
+export default function Chat({ onLogout }) {
   const [sessionId, setSessionId] = useState(() => getSessionId());
   const [messages, setMessages] = useState(() =>
     loadMessagesForSession(sessionId),
@@ -146,7 +146,11 @@ export default function Chat() {
         chartSpec: data.chartSpec || null,
       };
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (_err) {
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        onLogout?.();
+        return;
+      }
       setError("Chat request failed. Please try again.");
       setMessages((prev) => [
         ...prev,
