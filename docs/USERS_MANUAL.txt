@@ -109,9 +109,9 @@ Important directories:
 - `frontend/` - React client
 - `backend/` - Express API server
 - `README.md` - general setup overview
-- `backend/QUICK_START.md` - backend startup notes
-- `backend/API_DOCUMENTATION.md` - API docs pointer
-- `backend/SUPABASE_SETUP.sql` - SQL setup for Supabase
+- `backend/docs/QUICK_START.md` - backend startup notes
+- `backend/docs/API_DOCUMENTATION.md` - API docs pointer
+- `backend/docs/supabase/SUPABASE_SETUP.sql` - SQL setup for Supabase
 
 3.4 Backend Installation
 
@@ -133,17 +133,14 @@ PORT=5001
 JWT_SECRET=your_random_secret
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_key
-LLM_PROVIDER=tamu
-TAMU_API_KEY=your_tamu_key
-TAMU_BASE_URL=https://chat.tamu.ai
-TAMU_CHAT_MODELS=protected.gpt-4o,protected.gpt-4.1,protected.o3-mini
+LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_key
 GEMINI_CHAT_MODEL=gemini-2.5-flash
 
 Notes:
 
-- `LLM_PROVIDER` may be `tamu`, `gemini`, or `ollama` depending on the deployment target. For the purpose of this project, `tamu` is the private service offered by A&M for testing.
-- For users outside A&M, please use `gemini`.
+- `LLM_PROVIDER` may be `gemini`, `tamu`, or `ollama` depending on the deployment target.
+- For general handoff and external use, `gemini` is the recommended setup path.
 - The backend must have valid Supabase credentials to function correctly.
 - The AI features require a working LLM provider configuration.
 
@@ -151,7 +148,7 @@ Step 4: Create the required Supabase tables.
 
 Open your Supabase dashboard, go to the SQL editor, and run the SQL script found in:
 
-backend/SUPABASE_SETUP.sql
+backend/docs/supabase/SUPABASE_SETUP.sql
 
 Step 5: Start the backend server.
 
