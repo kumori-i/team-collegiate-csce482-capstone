@@ -144,6 +144,36 @@ const detectCompositePositionIntent = (message = "") => {
   };
 };
 
+const isContextualPlayerReference = (message = "") =>
+  /\b(him|her|them|that player|this player|same player|that one|this one)\b/i.test(
+    String(message || ""),
+  );
+
+const extractSimilarPlayerNameFromMessage = (message = "") => {
+  const text = String(message || "").trim();
+  if (!text) return "";
+
+  const patterns = [
+    /\bsimilar players?\s+to\s+(.+?)$/i,
+    /\bplayer[s]?\s+similar\s+to\s+(.+?)$/i,
+    /\bsimilar player\s+for\s+(.+?)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match?.[1]) continue;
+    const candidate = String(match[1] || "")
+      .replace(/\b(who|that|they|with|using|via|in|from|for)\b.*$/i, "")
+      .replace(/[,.!?]+$/g, "")
+      .trim();
+    if (candidate && tokenizeName(candidate).length >= 2) {
+      return candidate;
+    }
+  }
+
+  return "";
+};
+
 const detectSimilarPlayersIntent = (message = "") => {
   const text = String(message || "").toLowerCase();
   const wantsSimilar =
@@ -161,10 +191,28 @@ const detectSimilarPlayersIntent = (message = "") => {
   let portalConstraintExplicit = false;
 
   if (
+    /\b(do not|don't|dont|does not|doesn't|doesnt)\s+have\s+to\s+be\s+active\b/.test(
+      text,
+    ) ||
+    /\b(do not|don't|dont|does not|doesn't|doesnt)\s+have\s+to\s+be\s+in\s+(the\s+)?(transfer\s+)?portal\b/.test(
+      text,
+    ) ||
+    /\bnot necessarily active\b/.test(text) ||
+    /\b(active status|portal status)\s+does(?:\s+not|n't)\s+matter\b/.test(
+      text,
+    ) ||
+    /\bthey\s+dont\s+have\s+to\s+be\s+active\b/.test(text) ||
+    /\ball players\b|\bany players\b|\bregardless of portal\b/.test(text)
+  ) {
+    portalState = "any";
+    portalConstraintExplicit = true;
+  } else if (
     /\bnot in (the )?(transfer )?portal\b/.test(text) ||
     /\boutside (the )?(transfer )?portal\b/.test(text) ||
     /\bnot in portal\b/.test(text) ||
-    /\bnon-portal\b/.test(text)
+    /\bnon-portal\b/.test(text) ||
+    /\bnot active\b/.test(text) ||
+    /\binactive\b/.test(text)
   ) {
     portalState = "non_portal_only";
     portalConstraintExplicit = true;
@@ -177,11 +225,6 @@ const detectSimilarPlayersIntent = (message = "") => {
     /\btransferable\b/.test(text)
   ) {
     portalState = "portal_only";
-    portalConstraintExplicit = true;
-  }
-
-  if (/\ball players\b|\bany players\b|\bregardless of portal\b/.test(text)) {
-    portalState = "any";
     portalConstraintExplicit = true;
   }
 
@@ -1224,15 +1267,18 @@ export const runChatAgent = async (
       historyText,
       userId,
     });
+    const deterministicTarget = extractSimilarPlayerNameFromMessage(message);
     const rememberedPlayer = safeSessionId
       ? getSessionPlayer(safeSessionId)
       : null;
     const searchTarget =
+      deterministicTarget ||
       extractedTarget?.playerName ||
       (rememberedPlayer?.name_split &&
-      new RegExp(`\\b${rememberedPlayer.name_split.toLowerCase()}\\b`).test(
+      (new RegExp(`\\b${rememberedPlayer.name_split.toLowerCase()}\\b`).test(
         message.toLowerCase(),
-      )
+      ) ||
+        isContextualPlayerReference(message))
         ? rememberedPlayer.name_split
         : "");
 
