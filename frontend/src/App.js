@@ -40,13 +40,12 @@ function App() {
   return (
     <BrowserRouter>
       <div className="App">
-        {isAuthenticated && (
-          <Navbar
-            onLogout={handleLogout}
-            theme={theme}
-            onToggleTheme={handleToggleTheme}
-          />
-        )}
+        <Navbar
+          isAuthenticated={isAuthenticated}
+          onLogout={handleLogout}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+        />
 
         <Routes>
           <Route
@@ -73,11 +72,7 @@ function App() {
 
           <Route
             path="/"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
+            element={<Home isAuthenticated={isAuthenticated} />}
           />
 
           <Route

@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import "./Home.css";
 
-export default function Home() {
+export default function Home({ isAuthenticated }) {
+  const searchPath = isAuthenticated ? "/search" : "/login";
+  const chatPath = isAuthenticated ? "/chat" : "/login";
+
   return (
     <div className="home-page">
       <section className="home-hero">
@@ -13,10 +16,10 @@ export default function Home() {
             scouting, and performance planning.
           </p>
           <div className="hero-actions">
-            <Link to="/search" className="hero-button primary">
+            <Link to={searchPath} className="hero-button primary">
               Search Players
             </Link>
-            <Link to="/chat" className="hero-button ghost">
+            <Link to={chatPath} className="hero-button ghost">
               Ask the Dataset
             </Link>
           </div>
@@ -64,12 +67,12 @@ export default function Home() {
       </section>
 
       <section className="home-grid">
-        <Link to="/search" className="grid-card grid-link">
+        <Link to={searchPath} className="grid-card grid-link">
           <h3>Search the Roster</h3>
           <p>Filter by role, position, and performance signals in seconds.</p>
           <span className="grid-cta">Open Search</span>
         </Link>
-        <Link to="/chat" className="grid-card grid-link">
+        <Link to={chatPath} className="grid-card grid-link">
           <h3>Talk to the Data</h3>
           <p>Ask direct questions and stay grounded in your dataset.</p>
           <span className="grid-cta">Open Chat</span>

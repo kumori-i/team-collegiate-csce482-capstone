@@ -1,5 +1,7 @@
 {
   "name": "CerebroChat",
+  "short_name": "CerebroChat",
+  "description": "CerebroChat basketball analytics and scouting platform",
   "icons": [
     {
       "src": "pwa-icons/icon192.png",
@@ -13,5 +15,7 @@
     }
   ],
   "start_url": ".",
-  "display": "standalone"
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
 }

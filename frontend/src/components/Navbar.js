@@ -2,11 +2,23 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Navbar.css";
 
-export default function Navbar({ user, onLogout, theme, onToggleTheme }) {
+export default function Navbar({
+  isAuthenticated,
+  onLogout,
+  theme,
+  onToggleTheme,
+}) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const navigate = useNavigate();
 
+  const searchPath = isAuthenticated ? "/search" : "/login";
+  const chatPath = isAuthenticated ? "/chat" : "/login";
+
   const handleProfileClick = () => {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
     setShowProfileMenu(!showProfileMenu);
   };
 
@@ -36,10 +48,10 @@ export default function Navbar({ user, onLogout, theme, onToggleTheme }) {
           <Link to="/" className="nav-link">
             Home
           </Link>
-          <Link to="/search" className="nav-link">
+          <Link to={searchPath} className="nav-link">
             Search
           </Link>
-          <Link to="/chat" className="nav-link">
+          <Link to={chatPath} className="nav-link">
             Chat
           </Link>
         </div>
