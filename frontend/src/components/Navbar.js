@@ -2,17 +2,34 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Navbar.css";
 
-export default function Navbar({ user, onLogout, theme, onToggleTheme }) {
+export default function Navbar({
+  isAuthenticated,
+  onLogout,
+  theme,
+  onToggleTheme,
+}) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const navigate = useNavigate();
 
+  const searchPath = isAuthenticated ? "/search" : "/login";
+  const chatPath = isAuthenticated ? "/chat" : "/login";
+
   const handleProfileClick = () => {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
     setShowProfileMenu(!showProfileMenu);
   };
 
   const handleViewProfile = () => {
     setShowProfileMenu(false);
     navigate("/profile");
+  };
+
+  const handleViewCostDashboard = () => {
+    setShowProfileMenu(false);
+    navigate("/cost-dashboard");
   };
 
   const handleLogout = () => {
@@ -31,10 +48,10 @@ export default function Navbar({ user, onLogout, theme, onToggleTheme }) {
           <Link to="/" className="nav-link">
             Home
           </Link>
-          <Link to="/search" className="nav-link">
+          <Link to={searchPath} className="nav-link">
             Search
           </Link>
-          <Link to="/chat" className="nav-link">
+          <Link to={chatPath} className="nav-link">
             Chat
           </Link>
         </div>
@@ -92,6 +109,12 @@ export default function Navbar({ user, onLogout, theme, onToggleTheme }) {
             <div className="profile-menu">
               <button onClick={handleViewProfile} className="profile-menu-item">
                 View Profile
+              </button>
+              <button
+                onClick={handleViewCostDashboard}
+                className="profile-menu-item"
+              >
+                Cost Dashboard
               </button>
               <button onClick={handleLogout} className="profile-menu-item">
                 Logout

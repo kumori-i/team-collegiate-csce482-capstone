@@ -7,6 +7,7 @@ const PLAYER_COLUMNS = `unique_id, name_split, team, position, league, class,
   pts_g, reb_g, ast_g, fg, c_3pt, ft, stl_g, blk_g, to_g,
   min_g, g, c_2pt, efg, ts, usg, ppp, orb_g, drb_g, pf_g, a_to,
   ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40`;
+const SIMILARITY_METRICS = ["psp", "c_3pe", "fgs", "ram", "dsi", "usg"];
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,6 +58,88 @@ const normalizePositionFilter = (value = "") => {
   if (/\bguard\b|\bg\b/.test(text)) return "G";
   if (/\bforward\b|\bf\b/.test(text)) return "F";
   return raw;
+};
+
+const normalizePercentLike = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return num <= 1 ? num * 100 : num;
+};
+
+const normalizeSimilarityStat = (metric, value) => {
+  if (metric === "c_3pe" || metric === "usg") {
+    return normalizePercentLike(value);
+  }
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const isPortalAvailable = (player = {}) => {
+  if (typeof player.portal_available === "boolean")
+    return player.portal_available;
+  if (typeof player.in_portal === "boolean") return player.in_portal;
+  if (typeof player.transfer_portal === "boolean")
+    return player.transfer_portal;
+
+  const portalLikeEntries = Object.entries(player).filter(([key]) =>
+    /portal|transfer/i.test(String(key)),
+  );
+  for (const [, rawValue] of portalLikeEntries) {
+    if (typeof rawValue === "boolean") return rawValue;
+    if (typeof rawValue === "number") return rawValue > 0;
+    if (typeof rawValue === "string") {
+      const text = rawValue.toLowerCase().trim();
+      if (
+        /\byes\b|\btrue\b|\bavailable\b|\bin portal\b|\btransfer portal\b/.test(
+          text,
+        )
+      ) {
+        return true;
+      }
+      if (
+        /\bno\b|\bfalse\b|\bnot available\b|\bnot in portal\b|\binactive\b/.test(
+          text,
+        )
+      ) {
+        return false;
+      }
+    }
+  }
+
+  const combinedText = [
+    player.team,
+    player.league,
+    player.class,
+    player.status,
+    player.roster_status,
+  ]
+    .map((value) => String(value || "").toLowerCase())
+    .join(" ");
+  return (
+    /\btransfer portal\b/.test(combinedText) ||
+    /\bin portal\b/.test(combinedText)
+  );
+};
+
+const scoreSimilarity = (target, candidate, minMaxByMetric) => {
+  let total = 0;
+  let count = 0;
+  for (const metric of SIMILARITY_METRICS) {
+    const targetValue = normalizeSimilarityStat(metric, target?.[metric]);
+    const candidateValue = normalizeSimilarityStat(metric, candidate?.[metric]);
+    if (!Number.isFinite(targetValue) || !Number.isFinite(candidateValue)) {
+      continue;
+    }
+
+    const bounds = minMaxByMetric[metric] || { min: 0, max: 0 };
+    const range = Math.max(1e-6, bounds.max - bounds.min);
+    const distance = Math.abs(targetValue - candidateValue) / range;
+    const similarity = Math.max(0, 1 - distance);
+    total += similarity;
+    count += 1;
+  }
+  if (!count) return -1;
+  return total / count;
 };
 
 const percentile = (values = [], p = 0.9) => {
@@ -205,6 +288,67 @@ export const getPlayer = async (id) => {
     throw new Error(`Player lookup failed: ${error.message}`);
   }
   return data;
+};
+
+export const getSimilarPlayersById = async ({
+  id,
+  limit = 5,
+  portalState = "any",
+}) => {
+  const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
+  const targetPlayer = await getPlayer(id);
+
+  let poolQuery = supabase
+    .from("ncaa_players_d1_male")
+    .select("*")
+    .neq("unique_id", id)
+    .not("name_split", "is", null)
+    .neq("name_split", "")
+    .limit(500);
+
+  if (targetPlayer.position) {
+    poolQuery = poolQuery.ilike("position", `%${targetPlayer.position}%`);
+  }
+
+  const { data: candidatePool, error } = await poolQuery;
+  if (error) {
+    throw new Error(`Similar player lookup failed: ${error.message}`);
+  }
+
+  const pool = (Array.isArray(candidatePool) ? candidatePool : []).filter(
+    (candidate) => {
+      if (portalState === "portal_only") return isPortalAvailable(candidate);
+      if (portalState === "non_portal_only")
+        return !isPortalAvailable(candidate);
+      return true;
+    },
+  );
+  if (pool.length === 0) {
+    return { player: targetPlayer, players: [] };
+  }
+
+  const minMaxByMetric = {};
+  for (const metric of SIMILARITY_METRICS) {
+    const values = [targetPlayer, ...pool]
+      .map((row) => normalizeSimilarityStat(metric, row?.[metric]))
+      .filter((value) => Number.isFinite(value));
+    minMaxByMetric[metric] =
+      values.length === 0
+        ? { min: 0, max: 0 }
+        : { min: Math.min(...values), max: Math.max(...values) };
+  }
+
+  const players = pool
+    .map((candidate) => ({
+      player: candidate,
+      similarity: scoreSimilarity(targetPlayer, candidate, minMaxByMetric),
+    }))
+    .filter((entry) => entry.similarity >= 0)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, safeLimit)
+    .map((entry) => entry.player);
+
+  return { player: targetPlayer, players };
 };
 
 export const getTopPlayersByMetric = async ({

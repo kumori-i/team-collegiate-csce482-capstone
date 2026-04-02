@@ -1,6 +1,8 @@
 import express from "express";
+import { getArchetypePromptContext } from "../services/archetypes.js";
 
 const router = express.Router();
+const ARCHETYPE_PROMPT_CONTEXT = getArchetypePromptContext();
 
 /**
  * @swagger
@@ -233,7 +235,17 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const reply = await generateAnswer(message);
+    const prompt = `You are the direct chat endpoint for a basketball analytics app.
+Answer the user's question concisely.
+Use the archetype reference below when the question is about archetypes.
+Do not invent player-specific database results unless the user already supplied them in the prompt.
+
+${ARCHETYPE_PROMPT_CONTEXT}
+
+User message:
+${message}`;
+
+    const reply = await generateAnswer(prompt);
     return res.json({
       reply,
       sources: [],

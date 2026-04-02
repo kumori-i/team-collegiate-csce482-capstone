@@ -1,70 +1,89 @@
-# Getting Started with Create React App
+# Frontend Overview
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This frontend is a Create React App application for the CerebroChat basketball analytics interface. It handles authenticated navigation, dataset chat, player detail views, and the model cost dashboard.
 
-## Available Scripts
+## Core Responsibilities
 
-In the project directory, you can run:
+- Authenticate users through the backend-issued JWT flow.
+- Route users between home, search, chat, player details, profile, and cost dashboard pages.
+- Render chat responses, including chart responses when the backend returns a `chartSpec`.
+- Display per-user cost and usage summaries from the backend usage API.
 
-### `npm start`
+## Project Structure
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```text
+frontend/
+  public/                  Static CRA assets
+  src/
+    components/            Shared UI components
+    pages/                 Route-level screens
+    api.js                 Backend API client helpers
+    auth.js                JWT parsing and expiry helpers
+    App.js                 Top-level router and auth shell
+    setupTests.js          Jest / Testing Library setup
+  docs/
+    FRONTEND_ARCHITECTURE.md
+    FRONTEND_USER_TESTING.md
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Main Pages
 
-### `npm test`
+- `Home`: landing page after login.
+- `Search`: player lookup and navigation to player detail pages.
+- `Chat`: dataset-grounded chat with optional chart rendering.
+- `PlayerDetails`: player metrics, charts, and report generation.
+- `Profile`: user profile data and account deletion.
+- `CostDashboard`: usage, token, and estimated cost charts.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Environment and Startup
 
-### `npm run build`
+Install dependencies:
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+cd frontend
+npm install
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Start the development server:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npm start
+```
 
-### `npm run eject`
+By default, the frontend runs on `http://localhost:3000` and proxies API requests to `http://localhost:5001`.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Optional Environment Variables
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- `REACT_APP_API_URL`: explicit backend API base URL. If omitted, the CRA proxy is used.
+- `REACT_APP_GOOGLE_CLIENT_ID`: Google Sign-In client ID used by the login page.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## Testing
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Run the frontend unit/component tests:
 
-## Learn More
+```bash
+cd frontend
+CI=true npm test -- --watch=false
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Build the production bundle:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+cd frontend
+npm run build
+```
 
-### Code Splitting
+## Documentation
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+- Architecture notes: [docs/FRONTEND_ARCHITECTURE.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend/docs/FRONTEND_ARCHITECTURE.md)
+- Manual user testing guide: [docs/FRONTEND_USER_TESTING.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend/docs/FRONTEND_USER_TESTING.md)
 
-### Analyzing the Bundle Size
+## Current Testing Focus
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+Automated tests currently prioritize high-risk user-facing flows:
 
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- auth gating for protected routes
+- profile menu navigation and logout actions
+- chat message send/render behavior
+- chart rendering only when the backend explicitly requests it
+- cost dashboard loading and empty-state behavior

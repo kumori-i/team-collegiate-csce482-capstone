@@ -1,0 +1,453 @@
+CEREBROCHAT USERS MANUAL
+
+Team: Ethan Rendell, Harrison Ko, Joshua George, Robert Stacks
+Product Name: CerebroChat
+Document Purpose: This manual explains hardware needs, software installation, and operating instructions for the intended users of the CerebroChat basketball analytics application.
+
+====================================================================
+1. INTRODUCTION
+====================================================================
+
+1.1 Product Overview
+
+CerebroChat is a basketball-focused analytics and scouting application.
+It allows authorized users to:
+
+- sign in securely,
+- search for players,
+- open detailed player pages,
+- view player archetypes,
+- compare players,
+- generate scouting reports, and
+- ask natural-language questions through a chat interface grounded in the application dataset.
+
+The system is designed for coaches, analysts, recruiters, and other basketball staff who need fast access to player data and AI-assisted summaries.
+
+1.2 Intended Users
+
+This manual is written for:
+
+- project evaluators,
+- instructors,
+- system administrators,
+- developers installing the system locally, and
+- end users operating the web application.
+
+====================================================================
+2. HARDWARE INSTALLATION
+====================================================================
+
+2.1 Hardware Requirements
+
+CerebroChat is a web-based software product. It does not require custom physical hardware assembly. No sensors, embedded boards, or external devices are required for normal operation.
+
+Minimum recommended hardware for local use:
+
+- Computer: Windows, macOS, or Linux desktop/laptop
+- Processor: Dual-core CPU or better
+- Memory: 8 GB RAM minimum
+- Storage: At least 2 GB free disk space
+- Network: Reliable internet connection
+
+Recommended hardware for smoother development and testing:
+
+- Processor: Modern quad-core CPU
+- Memory: 16 GB RAM
+- Storage: SSD with at least 5 GB free space
+- Display: 1920x1080 or better
+
+2.2 Hardware Installation Procedure
+
+Because the product is software-based, no traditional hardware installation is required.
+
+To prepare a machine for use:
+
+1. Power on the computer.
+2. Connect the computer to the internet.
+3. Confirm that a modern web browser is installed.
+4. Confirm that Node.js and npm are installed if the system will be run locally.
+
+2.3 Browser Requirements
+
+The application is intended to be used in a modern browser such as:
+
+- Google Chrome
+- Microsoft Edge
+- Mozilla Firefox
+- Safari
+
+====================================================================
+3. SOFTWARE INSTALLATION
+====================================================================
+
+3.1 Software Components
+
+The project contains two main software components:
+
+- Frontend: React application in the `frontend/` directory
+- Backend: Express server with Supabase and LLM integration in the `backend/` directory
+
+Supporting services include:
+
+- Supabase for database and user storage
+- Google OAuth for sign-in
+- TAMU, Gemini, or Ollama for AI generation
+
+3.2 Prerequisites
+
+Install the following before setting up the project:
+
+- Node.js
+- npm
+- A configured Supabase project
+- Required API keys and environment variables
+
+3.3 Folder Structure
+
+Important directories:
+
+- `frontend/` - React client
+- `backend/` - Express API server
+- `README.md` - general setup overview
+- `backend/docs/QUICK_START.md` - backend startup notes
+- `backend/docs/API_DOCUMENTATION.md` - API docs pointer
+- `backend/docs/supabase/SUPABASE_SETUP.sql` - SQL setup for Supabase
+
+3.4 Backend Installation
+
+Step 1: Open a terminal and move to the backend folder.
+
+Command:
+cd backend
+
+Step 2: Install backend dependencies.
+
+Command:
+npm install
+
+Step 3: Create and configure a `.env` file inside `backend/`.
+
+Example environment variables:
+
+PORT=5001
+JWT_SECRET=your_random_secret
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_key
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_key
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+
+Notes:
+
+- `LLM_PROVIDER` may be `gemini`, `tamu`, or `ollama` depending on the deployment target.
+- For general handoff and external use, `gemini` is the recommended setup path.
+- The backend must have valid Supabase credentials to function correctly.
+- The AI features require a working LLM provider configuration.
+
+Step 4: Create the required Supabase tables.
+
+Open your Supabase dashboard, go to the SQL editor, and run the SQL script found in:
+
+backend/docs/supabase/SUPABASE_SETUP.sql
+
+Step 5: Start the backend server.
+
+Command:
+npm run dev
+
+Expected result:
+
+- The backend starts on port 5001 unless another port is configured.
+- Health endpoint becomes available at `http://localhost:5001/health`.
+- API documentation is available at `http://localhost:5001/api/docs`.
+
+3.5 Frontend Installation
+
+Step 1: Open a new terminal and move to the frontend folder.
+
+Command:
+cd frontend
+
+Step 2: Install frontend dependencies.
+
+Command:
+npm install
+
+Step 3: Optionally create a frontend `.env` file.
+
+Example:
+
+REACT_APP_API_URL=http://localhost:5001/api
+
+Step 4: Start the frontend.
+
+Command:
+npm start
+
+Expected result:
+
+- The React app starts in development mode.
+- A browser window opens automatically or can be opened manually.
+- The frontend connects to the backend API.
+
+3.6 Verifying Installation
+
+To confirm the system is installed correctly:
+
+1. Start the backend.
+2. Start the frontend.
+3. Open the application in a browser.
+4. Navigate to the login page.
+5. Sign in successfully.
+6. Search for a player.
+7. Open a player details page.
+8. Open the chat page and submit a test question.
+
+If all of these actions work, installation is complete.
+
+====================================================================
+4. SYSTEM OPERATION
+====================================================================
+
+4.1 Starting the System
+
+To operate the system locally:
+
+1. Start the backend server from `backend/`.
+2. Start the frontend server from `frontend/`.
+3. Open the browser to the frontend URL shown by React.
+4. Sign in using the supported authentication method.
+
+4.2 Logging In
+
+The application uses protected routes. Users must authenticate before accessing the main application pages.
+
+General login process:
+
+1. Open the login page.
+2. Complete the sign-in process.
+3. Wait for the application to redirect to the home page.
+
+If login fails:
+
+- verify internet access,
+- verify backend configuration,
+- verify authentication configuration,
+- confirm valid API credentials are present.
+
+4.3 Navigation Overview
+
+After login, the navigation bar provides access to:
+
+- Home
+- Search
+- Chat
+- Profile
+
+The user may also:
+
+- toggle the theme,
+- open the profile menu,
+- log out of the application.
+
+4.4 Home Page Operation
+
+The home page acts as the main landing page after login.
+
+From the home page, users can:
+
+- go to player search,
+- open the chat interface,
+- review the product summary and current capabilities.
+
+4.5 Search Page Operation
+
+The Search page is used to locate players in the dataset.
+
+Basic steps:
+
+1. Click the Search navigation link.
+2. Enter a player name or search text.
+3. Wait for matching results to appear.
+4. Review the returned player list.
+5. Click a player result to open the player details page.
+
+Search results may include:
+
+- player name,
+- team,
+- position,
+- archetype tags,
+- transfer portal availability indicator.
+
+4.6 Player Details Page Operation
+
+The Player Details page provides a deeper view of a selected player.
+
+Users can:
+
+- review player metrics,
+- review player archetypes,
+- view charts,
+- compare the selected player with other players,
+- generate a scouting report,
+- inspect similar-player information.
+
+Basic steps:
+
+1. Open a player from search results.
+2. Review the displayed statistical information.
+3. Review the listed archetype labels.
+4. Use comparison tools if needed.
+5. Generate an AI scouting report when desired.
+
+4.7 Archetype Use
+
+Archetypes are labels assigned based on metric thresholds defined in the application.
+These archetypes help users quickly describe a player profile.
+
+Users may:
+
+- view archetypes on player pages,
+- ask chat questions about what an archetype means,
+- ask which archetypes match a specific player,
+- ask for similar players using archetype-related prompts.
+
+Example user questions:
+
+- "What is a Modern Big?"
+- "What are Cameron Boozer's archetypes?"
+- "Find 5 similar players to Cameron Boozer via his archetypes."
+
+4.8 Chat Page Operation
+
+The Chat page allows users to ask natural-language questions about the basketball dataset.
+
+Basic steps:
+
+1. Click the Chat navigation link.
+2. Type a question in the message box.
+3. Press Send.
+4. Wait for the assistant response.
+5. Continue asking follow-up questions in the same session.
+
+Example chat use cases:
+
+- ask for a player's archetypes,
+- ask for similar players,
+- ask for top players by metric,
+- ask for player reports,
+- ask for explanations of archetypes or data terms.
+
+The chat system stores session context during use, so follow-up questions may depend on prior messages until the session is reset.
+
+4.9 Resetting Chat
+
+The chat page includes a Reset control.
+
+Use Reset when:
+
+- the conversation context becomes confusing,
+- the user wants to start a new question thread,
+- prior player context should be cleared.
+
+4.10 Profile Page Operation
+
+The Profile page is used for account-related actions.
+
+Users can:
+
+- view their account information,
+- manage profile-related settings if enabled,
+- log out,
+- delete an account if the system configuration permits it.
+
+4.11 Logging Out
+
+To log out:
+
+1. Open the profile menu in the navigation bar.
+2. Select Logout.
+3. The system removes the authentication token and returns the user to the login page.
+
+====================================================================
+5. ADMINISTRATIVE AND MAINTENANCE NOTES
+====================================================================
+
+5.1 API Documentation
+
+Swagger API documentation is available when the backend is running:
+
+http://localhost:5001/api/docs
+
+This page can be used by evaluators and developers to inspect the available routes and payloads.
+
+5.2 Health Check
+
+The backend health endpoint is:
+
+http://localhost:5001/health
+
+If the backend is running correctly, it should return a healthy status response.
+
+5.3 Common Startup Problems
+
+Problem: Frontend does not load data.
+
+Possible causes:
+
+- backend is not running,
+- incorrect frontend API URL,
+- CORS or proxy misconfiguration,
+- invalid environment variables.
+
+Problem: Login fails.
+
+Possible causes:
+
+- missing authentication credentials,
+- invalid Google OAuth configuration,
+- backend auth route failure,
+- expired token.
+
+Problem: AI chat or reports fail.
+
+Possible causes:
+
+- LLM provider not configured,
+- invalid TAMU, Gemini, or Ollama settings,
+- missing API keys,
+- provider downtime or request limits.
+
+Problem: Database functions fail.
+
+Possible causes:
+
+- missing Supabase credentials,
+- SQL setup not applied,
+- missing or renamed table columns,
+- restricted database permissions.
+
+====================================================================
+6. SAFE USE AND LIMITATIONS
+====================================================================
+
+6.1 Intended Use
+
+This application is intended to support basketball analysis and decision-making. It is a support tool and should not be the only source used for high-stakes recruiting, roster, or medical decisions.
+
+6.2 AI Limitations
+
+The AI features generate responses based on configured providers and available project data. Users should verify important conclusions against the underlying player metrics when making final decisions.
+
+6.3 Data Limitations
+
+Output quality depends on the completeness and correctness of the connected dataset. If the dataset is incomplete or outdated, system outputs may also be incomplete or outdated.
+
+====================================================================
+7. CONCLUSION
+====================================================================
+
+CerebroChat provides a combined search, scouting, and conversational analytics workflow for basketball users. With the backend configured, the frontend running, and the required external services connected, users can search players, inspect archetypes, compare profiles, generate reports, and query the dataset through natural language.
+
+End of Users Manual

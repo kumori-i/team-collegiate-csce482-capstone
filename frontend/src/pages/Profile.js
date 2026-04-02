@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getUserProfile, deleteAccount } from "../api";
+import { deleteAccount, getUserProfile } from "../api";
 import "./Profile.css";
 
 export default function Profile({ onLogout }) {
@@ -21,7 +21,7 @@ export default function Profile({ onLogout }) {
       setUser(userData);
     } catch (error) {
       console.error("Failed to load profile:", error);
-      if (error.response?.status === 401) {
+      if (error.response?.status === 401 || error.response?.status === 403) {
         onLogout();
       }
     } finally {
@@ -43,12 +43,18 @@ export default function Profile({ onLogout }) {
       navigate("/");
     } catch (error) {
       console.error("Failed to delete account:", error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        onLogout();
+        return;
+      }
       alert(error.response?.data?.error || "Failed to delete account");
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);
     }
   };
+
+  const memberSince = user?.createdAt || user?.created_at || null;
 
   if (loading) {
     return (
@@ -77,11 +83,12 @@ export default function Profile({ onLogout }) {
               <label>Email</label>
               <div className="profile-value">{user.email}</div>
             </div>
-
             <div className="profile-field">
               <label>Member Since</label>
               <div className="profile-value">
-                {new Date(user.createdAt).toLocaleDateString()}
+                {memberSince
+                  ? new Date(memberSince).toLocaleDateString()
+                  : "N/A"}
               </div>
             </div>
           </div>

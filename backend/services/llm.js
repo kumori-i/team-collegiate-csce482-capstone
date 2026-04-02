@@ -1,3 +1,5 @@
+import { normalizeUsage, recordUsageEvent } from "./usageTracker.js";
+
 const TAMU_API_KEY = process.env.TAMU_API_KEY || "";
 const TAMU_BASE_URL = process.env.TAMU_BASE_URL || "https://chat.tamu.ai";
 const TAMU_CHAT_MODELS = (process.env.TAMU_CHAT_MODELS || "gpt5.2,gpt5.1,gpt5")
@@ -59,7 +61,10 @@ const parseTamuResponse = async (res) => {
   return res.json();
 };
 
-export const generateWithProvider = async (prompt) => {
+export const generateWithProviderDetailed = async (
+  prompt,
+  { userId = "", route = "", feature = "" } = {},
+) => {
   if (process.env.LLM_PROVIDER && process.env.LLM_PROVIDER !== "tamu") {
     throw new Error(
       "LLM_PROVIDER must be 'tamu' for agent routes. Gemini/Ollama are disabled.",
@@ -77,9 +82,7 @@ export const generateWithProvider = async (prompt) => {
       ? { temperature: LLM_TEMPERATURE }
       : {}),
     ...(Number.isFinite(LLM_TOP_P) ? { top_p: LLM_TOP_P } : {}),
-    ...(Number.isFinite(LLM_MAX_TOKENS)
-      ? { max_tokens: LLM_MAX_TOKENS }
-      : {}),
+    ...(Number.isFinite(LLM_MAX_TOKENS) ? { max_tokens: LLM_MAX_TOKENS } : {}),
   };
 
   let lastError = null;
@@ -97,7 +100,22 @@ export const generateWithProvider = async (prompt) => {
       const data = await parseTamuResponse(res);
       const text =
         data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "";
-      return text.trim();
+      const usage = normalizeUsage({
+        prompt,
+        responseText: text,
+        usage: data?.usage,
+      });
+      await recordUsageEvent({
+        userId,
+        provider: "tamu",
+        model,
+        route,
+        feature,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+      });
+      return { text: text.trim(), model, usage };
     }
 
     const detail = await res.text();
@@ -108,4 +126,9 @@ export const generateWithProvider = async (prompt) => {
   }
 
   throw lastError || new Error("TAMU generate failed: no available models");
+};
+
+export const generateWithProvider = async (prompt, options = {}) => {
+  const result = await generateWithProviderDetailed(prompt, options);
+  return result.text;
 };

@@ -56,6 +56,7 @@ const swaggerSpec = swaggerJsdoc({
       { name: "Players", description: "Player data and report generation." },
       { name: "Scouting", description: "Scouting report generation." },
       { name: "Agent", description: "Agent orchestration endpoints." },
+      { name: "Usage", description: "Model usage and cost dashboards." },
       { name: "System", description: "Service health and diagnostics." },
     ],
     servers: [
@@ -136,12 +137,14 @@ const { default: chatRoutes } = await import("./routes/chat.js");
 const { default: playerRoutes } = await import("./routes/players.js");
 const { default: scoutingRoutes } = await import("./routes/scouting.js");
 const { default: agentRoutes } = await import("./routes/agent.js");
+const { default: usageRoutes } = await import("./routes/usage.js");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/api/scouting", scoutingRoutes);
 app.use("/api/agent", agentRoutes);
+app.use("/api/usage", usageRoutes);
 
 /**
  * @swagger

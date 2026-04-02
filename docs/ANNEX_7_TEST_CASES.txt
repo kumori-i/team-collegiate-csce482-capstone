@@ -1,0 +1,555 @@
+ANNEX 7: TEST CASES
+
+Project: CerebroChat
+Purpose: This annex contains a complete set of test cases for the testing phases planned for the CerebroChat system.
+
+====================================================================
+1. INTRODUCTION
+====================================================================
+
+This annex documents the planned and executed test cases for the CerebroChat basketball analytics application. The application includes a React frontend, an Express backend, authentication features, Supabase integration, player search and detail workflows, and AI-assisted chat and scouting functionality.
+
+The test cases are organized by testing phase:
+
+- Phase 1: Smoke Testing
+- Phase 2: Functional Testing
+- Phase 3: Integration Testing
+- Phase 4: User Interface Testing
+- Phase 5: Security and Access Control Testing
+- Phase 6: AI and Conversation Workflow Testing
+- Phase 7: Regression Testing
+- Phase 8: User Acceptance Testing Support Cases
+
+====================================================================
+2. TEST ENVIRONMENT SUMMARY
+====================================================================
+
+Test environment assumptions:
+
+- Frontend: React application running locally
+- Backend: Express server running on port 5001
+- Database: Supabase project connected and configured
+- Browser: Chrome, Edge, Firefox, or Safari
+- Authentication: JWT and Google OAuth configuration available
+- AI provider: TAMU, Gemini, or Ollama configured depending on environment
+
+Primary local URLs:
+
+- Frontend: React dev server URL
+- Backend health: http://localhost:5001/health
+- Backend API docs: http://localhost:5001/api/docs
+
+====================================================================
+3. TEST PHASE 1 - SMOKE TEST CASES
+====================================================================
+
+TC-SMK-001
+Title: Backend health endpoint responds successfully
+Objective: Verify that the backend server is running
+Preconditions: Backend server started
+Steps:
+1. Open browser or API tool
+2. Send GET request to /health
+Expected Result: HTTP 200 response with healthy status payload
+Priority: High
+
+TC-SMK-002
+Title: API documentation page loads
+Objective: Verify that API docs are available
+Preconditions: Backend server started
+Steps:
+1. Open browser
+2. Navigate to /api/docs
+Expected Result: Swagger UI page loads successfully
+Priority: High
+
+TC-SMK-003
+Title: OpenAPI JSON is available
+Objective: Verify the API contract is exposed
+Preconditions: Backend server started
+Steps:
+1. Send GET request to /api/openapi.json
+Expected Result: HTTP 200 response containing OpenAPI JSON
+Priority: Medium
+
+TC-SMK-004
+Title: Frontend application loads
+Objective: Verify the client starts successfully
+Preconditions: Frontend started
+Steps:
+1. Open frontend URL in browser
+Expected Result: Login page or application shell loads without crash
+Priority: High
+
+====================================================================
+4. TEST PHASE 2 - AUTHENTICATION TEST CASES
+====================================================================
+
+TC-AUTH-001
+Title: Register rejects empty payload
+Objective: Verify required-field validation for registration
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/auth/register with empty JSON body
+Expected Result: HTTP 400 response with validation error message
+Priority: High
+
+TC-AUTH-002
+Title: Register creates a new user
+Objective: Verify successful user registration
+Preconditions: Backend running and database available
+Steps:
+1. Send POST request to /api/auth/register with valid email and password
+Expected Result: HTTP 201 response indicating user creation
+Priority: High
+
+TC-AUTH-003
+Title: Register rejects duplicate email
+Objective: Verify duplicate account protection
+Preconditions: User email already exists
+Steps:
+1. Submit registration request for an existing email
+Expected Result: HTTP 400 response indicating email already registered
+Priority: High
+
+TC-AUTH-004
+Title: Login rejects missing credentials
+Objective: Verify login validation
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/auth/login with missing fields
+Expected Result: HTTP 400 or 401 according to validation path
+Priority: High
+
+TC-AUTH-005
+Title: Login rejects invalid credentials
+Objective: Verify failed login handling
+Preconditions: Backend running
+Steps:
+1. Submit login request with invalid email/password combination
+Expected Result: HTTP 401 response
+Priority: High
+
+TC-AUTH-006
+Title: Login succeeds for valid credentials
+Objective: Verify standard login flow
+Preconditions: Valid registered user exists
+Steps:
+1. Submit valid login credentials
+Expected Result: HTTP 200 response with JWT token
+Priority: High
+
+TC-AUTH-007
+Title: Google login rejects missing token
+Objective: Verify Google auth validation
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/auth/google without idToken
+Expected Result: HTTP 400 response
+Priority: High
+
+TC-AUTH-008
+Title: Google login succeeds with valid token
+Objective: Verify Google OAuth path
+Preconditions: Google auth configured correctly
+Steps:
+1. Submit valid Google ID token
+Expected Result: HTTP 200 response with JWT token
+Priority: High
+
+TC-AUTH-009
+Title: Protected profile route rejects missing token
+Objective: Verify route protection
+Preconditions: Backend running
+Steps:
+1. Send GET request to /api/auth/profile without Authorization header
+Expected Result: HTTP 401 response
+Priority: High
+
+TC-AUTH-010
+Title: Protected profile route returns user data for valid token
+Objective: Verify authenticated profile access
+Preconditions: Valid JWT available
+Steps:
+1. Send GET request to /api/auth/profile with valid token
+Expected Result: HTTP 200 response with user profile data
+Priority: High
+
+TC-AUTH-011
+Title: User can delete own account
+Objective: Verify account deletion workflow
+Preconditions: Valid JWT available
+Steps:
+1. Send DELETE request to /api/auth/account with valid token
+Expected Result: HTTP 200 response confirming deletion
+Priority: Medium
+
+====================================================================
+5. TEST PHASE 3 - PLAYER SEARCH AND DETAIL TEST CASES
+====================================================================
+
+TC-PLY-001
+Title: Player search returns results for valid query
+Objective: Verify player search
+Preconditions: Supabase contains player data
+Steps:
+1. Send GET request to /api/players/search with a valid player name fragment
+Expected Result: HTTP 200 response with players array and count
+Priority: High
+
+TC-PLY-002
+Title: Player search handles empty query
+Objective: Verify search default behavior
+Preconditions: Backend running
+Steps:
+1. Send GET request to /api/players/search without query
+Expected Result: HTTP 200 response with limited player list
+Priority: Medium
+
+TC-PLY-003
+Title: Player search rejects backend failure cleanly
+Objective: Verify error handling
+Preconditions: Simulated database failure
+Steps:
+1. Force search dependency failure
+2. Call player search endpoint
+Expected Result: HTTP 500 response with structured error payload
+Priority: Medium
+
+TC-PLY-004
+Title: Player detail endpoint returns player data
+Objective: Verify player detail lookup
+Preconditions: Valid player ID exists
+Steps:
+1. Send GET request to /api/players/{id}
+Expected Result: HTTP 200 response with player object
+Priority: High
+
+TC-PLY-005
+Title: Player detail endpoint rejects invalid ID
+Objective: Verify missing-player handling
+Preconditions: Invalid or nonexistent player ID used
+Steps:
+1. Send GET request to /api/players/{id} with invalid identifier
+Expected Result: HTTP 404 or error response depending on backend path
+Priority: High
+
+TC-PLY-006
+Title: Similar players endpoint returns related players
+Objective: Verify similarity lookup
+Preconditions: Valid player exists and candidate pool available
+Steps:
+1. Send GET request to /api/players/{id}/similar
+Expected Result: HTTP 200 response with players array
+Priority: High
+
+TC-PLY-007
+Title: Similar players endpoint respects limit parameter
+Objective: Verify result-size control
+Preconditions: Valid player exists
+Steps:
+1. Send GET request to /api/players/{id}/similar?limit=3
+Expected Result: Response returns at most 3 similar players
+Priority: Medium
+
+TC-PLY-008
+Title: Similar players endpoint handles missing player
+Objective: Verify missing source player handling
+Preconditions: Invalid player ID used
+Steps:
+1. Send GET request to /api/players/{id}/similar with invalid ID
+Expected Result: HTTP 404 response
+Priority: High
+
+====================================================================
+6. TEST PHASE 4 - SCOUTING REPORT TEST CASES
+====================================================================
+
+TC-RPT-001
+Title: Player report endpoint rejects missing player payload
+Objective: Verify report validation
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/players/report with incomplete payload
+Expected Result: HTTP 400 response
+Priority: High
+
+TC-RPT-002
+Title: Player report endpoint returns report for valid player
+Objective: Verify report generation
+Preconditions: AI provider configured and valid player payload available
+Steps:
+1. Send POST request to /api/players/report with required player fields
+Expected Result: HTTP 200 response with report text
+Priority: High
+
+TC-RPT-003
+Title: Agent report endpoint rejects missing inputs
+Objective: Verify agent report validation
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/agent/report with no message, player, or playerId
+Expected Result: HTTP 400 response
+Priority: High
+
+TC-RPT-004
+Title: Agent report endpoint generates report from player ID
+Objective: Verify report generation from backend data lookup
+Preconditions: Valid player ID exists and AI provider is available
+Steps:
+1. Send POST request to /api/agent/report with valid playerId
+Expected Result: HTTP 200 response with generated report
+Priority: High
+
+TC-RPT-005
+Title: Scouting generate endpoint rejects invalid request
+Objective: Verify scouting route validation
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/scouting/generate with missing required fields
+Expected Result: HTTP 400 response
+Priority: High
+
+====================================================================
+7. TEST PHASE 5 - CHAT AND AI WORKFLOW TEST CASES
+====================================================================
+
+TC-CHAT-001
+Title: Direct chat endpoint rejects missing message
+Objective: Verify chat validation
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/chat with missing message
+Expected Result: HTTP 400 response
+Priority: High
+
+TC-CHAT-002
+Title: Agent chat endpoint rejects missing message
+Objective: Verify agent chat validation
+Preconditions: Backend running
+Steps:
+1. Send POST request to /api/agent/chat with missing message
+Expected Result: HTTP 400 response
+Priority: High
+
+TC-CHAT-003
+Title: Chat answers archetype definition question
+Objective: Verify archetype context handling
+Preconditions: AI provider configured
+Steps:
+1. Open chat
+2. Ask "What is a Modern Big?"
+Expected Result: Response describes the archetype thresholds
+Priority: High
+
+TC-CHAT-004
+Title: Chat identifies a player's archetypes
+Objective: Verify player lookup plus archetype resolution
+Preconditions: Named player exists in dataset
+Steps:
+1. Ask "What are Cameron Boozer's archetypes?"
+Expected Result: Response lists matching archetype labels
+Priority: High
+
+TC-CHAT-005
+Title: Chat finds similar players using a named player
+Objective: Verify player similarity workflow
+Preconditions: Named player exists
+Steps:
+1. Ask "Find 5 similar players to Cameron Boozer"
+Expected Result: Response lists 5 similar players or fewer if the pool is smaller
+Priority: High
+
+TC-CHAT-006
+Title: Chat finds similar players using archetype-related wording
+Objective: Verify similar-player routing is not trapped by archetype explanation flow
+Preconditions: Named player exists
+Steps:
+1. Ask "Find 5 similar players to Cameron Boozer via his archetypes"
+Expected Result: Response returns similar-player list, not just archetype explanation
+Priority: High
+
+TC-CHAT-007
+Title: Chat respects transfer-availability filter
+Objective: Verify transfer-availability phrasing is recognized
+Preconditions: Dataset contains portal-available metadata
+Steps:
+1. Ask "Find 5 similar players to Cameron Boozer who are active and can be transferred"
+Expected Result: Returned players satisfy transfer-availability constraint according to dataset
+Priority: High
+
+TC-CHAT-008
+Title: Chat can reset session context
+Objective: Verify chat reset behavior
+Preconditions: Existing conversation in progress
+Steps:
+1. Use Reset control on chat page
+2. Ask a new unrelated question
+Expected Result: Old context is cleared
+Priority: Medium
+
+TC-CHAT-009
+Title: Chat handles ambiguous player names
+Objective: Verify disambiguation behavior
+Preconditions: Multiple matching names or fuzzy matches exist
+Steps:
+1. Ask about a player name with multiple possible matches
+Expected Result: Response asks user to clarify team, position, or ID
+Priority: High
+
+====================================================================
+8. TEST PHASE 6 - FRONTEND USER INTERFACE TEST CASES
+====================================================================
+
+TC-UI-001
+Title: Login page renders correctly
+Objective: Verify entry screen is visible
+Preconditions: User is logged out
+Steps:
+1. Open frontend
+Expected Result: Login page displays correctly
+Priority: High
+
+TC-UI-002
+Title: Navbar appears after authentication
+Objective: Verify protected navigation behavior
+Preconditions: Valid authentication token exists
+Steps:
+1. Sign in
+Expected Result: Navbar displays Home, Search, Chat, and profile controls
+Priority: High
+
+TC-UI-003
+Title: Theme toggle changes theme state
+Objective: Verify theme control
+Preconditions: User logged in
+Steps:
+1. Click theme toggle
+Expected Result: Visible theme change occurs and preference persists
+Priority: Medium
+
+TC-UI-004
+Title: Search results navigate to player details page
+Objective: Verify navigation flow
+Preconditions: Search results available
+Steps:
+1. Search for player
+2. Click one result
+Expected Result: Browser navigates to player details route
+Priority: High
+
+TC-UI-005
+Title: Player details page displays archetypes and metrics
+Objective: Verify detail page rendering
+Preconditions: Valid player page opened
+Steps:
+1. Open player details page
+Expected Result: Metrics, archetypes, and chart components are shown
+Priority: High
+
+TC-UI-006
+Title: Chat page displays sent and received messages
+Objective: Verify chat transcript rendering
+Preconditions: User logged in and backend available
+Steps:
+1. Send a chat message
+Expected Result: User message and assistant response are both rendered
+Priority: High
+
+====================================================================
+9. TEST PHASE 7 - SECURITY AND ACCESS CONTROL TEST CASES
+====================================================================
+
+TC-SEC-001
+Title: Protected frontend routes redirect unauthenticated users
+Objective: Verify client-side protection
+Preconditions: No auth token stored
+Steps:
+1. Attempt to open protected route
+Expected Result: User is redirected to login page
+Priority: High
+
+TC-SEC-002
+Title: Protected API route rejects request without token
+Objective: Verify API authorization
+Preconditions: Backend running
+Steps:
+1. Send request to protected profile route without token
+Expected Result: HTTP 401 response
+Priority: High
+
+TC-SEC-003
+Title: Protected API route rejects invalid token
+Objective: Verify token validation
+Preconditions: Invalid token available
+Steps:
+1. Send request with malformed or expired token
+Expected Result: HTTP 401 or 403 response
+Priority: High
+
+====================================================================
+10. TEST PHASE 8 - REGRESSION TEST CASES
+====================================================================
+
+TC-REG-001
+Title: Automated auth route tests pass
+Objective: Verify existing Jest route tests remain green
+Preconditions: Backend dependencies installed
+Steps:
+1. Run backend Jest tests
+Expected Result: Existing auth tests pass
+Priority: High
+
+TC-REG-002
+Title: Smoke script passes after backend changes
+Objective: Verify no critical endpoint regressions
+Preconditions: Backend running
+Steps:
+1. Run backend smoke test script
+Expected Result: Core smoke checks pass
+Priority: High
+
+TC-REG-003
+Title: Manual regression of core user flow passes
+Objective: Verify major workflow stability
+Preconditions: System running
+Steps:
+1. Log in
+2. Search for player
+3. Open player details
+4. Generate report
+5. Ask chat question
+Expected Result: Entire flow succeeds without error
+Priority: High
+
+====================================================================
+11. PASS / FAIL RECORD TEMPLATE
+====================================================================
+
+For each test case, record:
+
+- Test Case ID
+- Date executed
+- Tester name
+- Environment
+- Result: Pass / Fail
+- Notes
+- Defect ID if failed
+
+Suggested format:
+
+ID:
+Date:
+Tester:
+Environment:
+Result:
+Notes:
+Defect ID:
+
+====================================================================
+12. CONCLUSION
+====================================================================
+
+The above test cases provide a complete set of planned tests for smoke, functional, integration, interface, security, AI, regression, and acceptance-support testing for CerebroChat. These cases can be executed manually, through API tools, or through automated scripts where available.
+
+End of Annex 7

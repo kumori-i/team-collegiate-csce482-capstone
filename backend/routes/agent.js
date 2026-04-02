@@ -1,4 +1,6 @@
 import express from "express";
+import { authenticateToken } from "../middleware/auth.js";
+import { recordUsageEvent } from "../services/usageTracker.js";
 import {
   clearChatSessionMemory,
   runChatAgent,
@@ -38,25 +40,38 @@ const router = express.Router();
  *       500:
  *         description: Agent request failed
  */
-router.post("/chat", async (req, res) => {
+router.post("/chat", authenticateToken, async (req, res) => {
   try {
     const message =
       typeof req.body.message === "string" ? req.body.message.trim() : "";
     const sessionId =
       typeof req.body.sessionId === "string" ? req.body.sessionId.trim() : "";
     const history = Array.isArray(req.body.history) ? req.body.history : [];
+    const userId = req.user.id;
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const { reply, toolUsed } = await runChatAgent(message, {
+    const { reply, toolUsed, chartSpec } = await runChatAgent(message, {
       sessionId,
       history,
+      userId,
+    });
+    await recordUsageEvent({
+      userId,
+      provider: "internal",
+      model: "agent_request",
+      route: "/api/agent/chat",
+      feature: toolUsed || "chat_request",
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
     });
     return res.json({
       reply,
       agent: "chat",
       toolUsed,
+      chartSpec,
     });
   } catch (err) {
     console.error("Agent chat error:", err);
@@ -64,7 +79,7 @@ router.post("/chat", async (req, res) => {
   }
 });
 
-router.post("/reset", async (req, res) => {
+router.post("/reset", authenticateToken, async (req, res) => {
   try {
     const sessionId =
       typeof req.body.sessionId === "string" ? req.body.sessionId.trim() : "";
@@ -106,7 +121,7 @@ router.post("/reset", async (req, res) => {
  *       500:
  *         description: Agent request failed
  */
-router.post("/report", async (req, res) => {
+router.post("/report", authenticateToken, async (req, res) => {
   try {
     const message =
       typeof req.body.message === "string" ? req.body.message.trim() : "";
@@ -116,6 +131,7 @@ router.post("/report", async (req, res) => {
         : null;
     const directPlayerId =
       typeof req.body.playerId === "string" ? req.body.playerId.trim() : "";
+    const userId = req.user.id;
 
     if (!message && !playerInput && !directPlayerId) {
       return res
@@ -127,6 +143,17 @@ router.post("/report", async (req, res) => {
       message,
       playerInput,
       playerId: directPlayerId,
+      userId,
+    });
+    await recordUsageEvent({
+      userId,
+      provider: "internal",
+      model: "agent_request",
+      route: "/api/agent/report",
+      feature: toolUsed || "report_request",
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
     });
 
     return res.json({

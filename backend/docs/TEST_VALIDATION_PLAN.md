@@ -67,7 +67,7 @@ Use these as capstone-ready, reportable metrics.
 - Basic end-to-end flow where dependencies are configured.
 
 ### Out of scope (or best-effort)
-- Full external provider reliability (Google OAuth, TAMU/Gemini/Ollama uptime).
+- Full external provider reliability (Google OAuth, Gemini/TAMU/Ollama uptime).
 - Deep database correctness beyond API contract checks.
 - Deterministic AI content correctness (evaluate with rubric instead).
 

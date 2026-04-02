@@ -47,6 +47,7 @@ out/
 # =========================
 logs/
 *.log
+*.docx
 
 # Generated data cache
 backend/.cache/
