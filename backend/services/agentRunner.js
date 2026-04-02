@@ -355,6 +355,40 @@ const cleanExtractedPlayerName = (value = "") =>
     .replace(/[,.!?]+$/g, "")
     .trim();
 
+/** User is asking about multi-season / career data (needs player resolution + seasonHistory). */
+const detectPlayerHistoryCareerIntent = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  return (
+    /\b(histor(y|ies)|career|past seasons?|prior seasons?|previous seasons?|multi[- ]?season|year[- ]?over[- ]?year|yoy|progression|trajectory|development|freshman|sophomore|junior|senior)\b/.test(
+      text,
+    ) || /\bhow\s+(has|have|did)\b.*\b(changed|improved|progressed)\b/.test(text)
+  );
+};
+
+/** Deterministic name pull for "Name's history" / "history for Name" when LLM extraction fails. */
+const extractPlayerNameFromHistoryOrCareerMessage = (message = "") => {
+  const text = String(message || "").trim();
+  if (!text) return "";
+
+  const patterns = [
+    /^(.+?)'s\s+(?:career|season|history|stats|progression|trajectory|past)\b/i,
+    /\b(?:career|season|history|stats|progression|trajectory|past seasons?)\s+(?:for|of)\s+(.+?)(?:[?.,!]|$)/i,
+    /\bwhat(?:'s| is| was)\s+(.+?)'s\s+(?:career|history|season|stats)\b/i,
+    /\b(?:tell me about|about)\s+(.+?)'s\s+(?:career|history|season)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match?.[1]) continue;
+    const candidate = cleanExtractedPlayerName(match[1]);
+    if (candidate && tokenizeName(candidate).length >= 2) {
+      return candidate;
+    }
+  }
+
+  return "";
+};
+
 const extractChartPlayerNameFromMessage = (message = "") => {
   const text = String(message || "").trim();
   if (!text) return "";
@@ -989,7 +1023,8 @@ Return ONLY valid JSON with this schema:
 
 Guidelines:
 - Use "search_players" when user asks to find players by name/team/position.
-- Use "get_player_by_id" if user explicitly provides an id, or when they ask about career history, past seasons, year-over-year change, or progression (season snapshot data is attached automatically when available).
+- Use "search_players" when they ask about a named player's career, history, past seasons, or progression without giving a numeric player id (put the name in "query").
+- Use "get_player_by_id" only when the user provides a player id / unique_id in the message, or args must include "id" from explicit user text.
 - Use "top_players" when user asks for top/best/ranking by a metric.
 - Use "top_players_by_position" when user asks for best/top/most effective players at a position.
 - "effective_players" is a legacy alias for "top_players_by_position".
@@ -1652,18 +1687,65 @@ If tool result is empty, say there is not enough database evidence and ask a cla
   }
 
   let plan = await decideChatTool(message, { historyText, userId });
+
+  if (plan.tool === "get_player_by_id" && !plan.args?.id) {
+    const remembered = getSessionPlayer(safeSessionId);
+    const contextual =
+      isContextualPlayerReference(message) ||
+      isContextualReportReference(message);
+    if (remembered?.unique_id && contextual) {
+      plan = { tool: "get_player_by_id", args: { id: remembered.unique_id } };
+    } else {
+      const extracted = await extractPlayerLookupTarget(message, {
+        historyText,
+        userId,
+      });
+      const query =
+        (extracted?.playerName || "").trim() ||
+        extractPlayerNameFromHistoryOrCareerMessage(message);
+      if (query) {
+        plan = {
+          tool: "search_players",
+          args: {
+            query,
+            team: extracted?.team || "",
+            position: extracted?.position || "",
+            limit: 20,
+          },
+        };
+      } else {
+        plan = { tool: "none", args: {} };
+      }
+    }
+  }
+
   if (plan.tool === "none") {
-    const extracted = await extractReportTarget(message, {
-      historyText,
-      userId,
-    });
-    if (extracted?.playerName) {
+    const [reportExtract, lookupExtract] = await Promise.all([
+      extractReportTarget(message, {
+        historyText,
+        userId,
+      }),
+      extractPlayerLookupTarget(message, {
+        historyText,
+        userId,
+      }),
+    ]);
+    const mergedName =
+      (lookupExtract?.playerName || "").trim() ||
+      (reportExtract?.playerName || "").trim() ||
+      extractPlayerNameFromHistoryOrCareerMessage(message) ||
+      (detectPlayerHistoryCareerIntent(message) &&
+      (isContextualPlayerReference(message) ||
+        isContextualReportReference(message)) &&
+      getSessionPlayer(safeSessionId)?.name_split) ||
+      "";
+    if (mergedName) {
       plan = {
         tool: "search_players",
         args: {
-          query: extracted.playerName,
-          team: extracted.team || "",
-          position: extracted.position || "",
+          query: mergedName,
+          team: lookupExtract?.team || reportExtract?.team || "",
+          position: lookupExtract?.position || reportExtract?.position || "",
           limit: 20,
         },
       };
@@ -1703,8 +1785,11 @@ If tool result is empty, say there is not enough database evidence and ask a cla
   const replyPrompt = `You are the chat agent for a basketball analytics app.
 You must use ONLY the tool result below for factual claims.
 Do NOT use outside knowledge, assumptions, or any external data.
-If the tool result is null/empty or does not contain enough data, say you do not have enough database evidence and ask a clarifying question.
-If the tool result includes seasonHistory.seasons (array of past season rows), use it for career trajectory, year-over-year, or multi-season questions; if identityMissing is true or seasons is empty, say history is unavailable from the database rather than guessing.
+
+When to answer vs. when to ask for clarification:
+- If the tool result includes a "player" object (e.g. search_players+get_player_by_id or get_player_by_id), you have enough data to answer about that player. Summarize their stats from the player row. Do NOT say you lack database evidence or ask what "aspect" of history they want.
+- If "seasonHistory" is present: use seasonHistory.seasons for prior seasons when non-empty. If identityMissing is true, seasons is empty, or seasonHistory.fetchError is true, briefly note that prior seasons are not available or could not be loaded, but still answer from the current player row.
+- Only if the tool result is null, or search returned no usable player (no matches / empty list with no player), say you could not find that player in the database and suggest a clearer name or team—or ask which duplicate they meant if the tool result shows ambiguity (that case is handled elsewhere; do not invent ambiguity).
 
 User message:
 ${message}
