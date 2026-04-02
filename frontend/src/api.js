@@ -64,6 +64,133 @@ export const chatWithAgent = async (message, history = []) => {
   return res.data;
 };
 
+/**
+ * @param {Response} res
+ * @param {{ onStatus?: (d: object) => void, onToken?: (d: { text: string }) => void, onDone?: (d: object) => void, onError?: (d: { message?: string }) => void }} callbacks
+ */
+const consumeAgentSseResponse = async (res, callbacks = {}) => {
+  const { onStatus, onToken, onDone, onError } = callbacks;
+  const reader = res.body?.getReader?.();
+  if (!reader) {
+    throw new Error("Streaming not supported in this browser.");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const dispatchBlock = (block) => {
+    const lines = block.split("\n");
+    let eventName = "message";
+    const dataLines = [];
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trim());
+      }
+    }
+    if (dataLines.length === 0) return;
+    const payload = dataLines.join("\n");
+    let data;
+    try {
+      data = JSON.parse(payload);
+    } catch {
+      return;
+    }
+    if (eventName === "status" && onStatus) onStatus(data);
+    else if (eventName === "token" && onToken) onToken(data);
+    else if (eventName === "done" && onDone) onDone(data);
+    else if (eventName === "error" && onError) onError(data);
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      if (block.trim()) dispatchBlock(block);
+    }
+  }
+  if (buffer.trim()) {
+    dispatchBlock(buffer);
+  }
+};
+
+/**
+ * Streams agent chat over SSE (POST /api/agent/chat/stream).
+ * @param {string} message
+ * @param {Array<{role: string, content: string}>} history
+ * @param {{ onStatus?: (d: object) => void, onToken?: (d: { text: string }) => void, onDone?: (d: object) => void, onError?: (d: { message?: string }) => void }} callbacks
+ */
+export const chatWithAgentStream = async (message, history = [], callbacks = {}) => {
+  let sessionId = localStorage.getItem("agentSessionId");
+  const token = getValidStoredToken();
+  if (!sessionId) {
+    sessionId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `session-${Date.now()}`;
+    localStorage.setItem("agentSessionId", sessionId);
+  }
+
+  const res = await fetch(`${API_URL}/agent/chat/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ message, sessionId, history }),
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    const err = new Error("Unauthorized");
+    err.response = { status: res.status };
+    throw err;
+  }
+
+  if (!res.ok) {
+    const err = new Error(`Chat stream failed: ${res.status}`);
+    err.response = { status: res.status };
+    throw err;
+  }
+
+  await consumeAgentSseResponse(res, callbacks);
+};
+
+/**
+ * Streams scouting report over SSE (POST /api/agent/report/stream).
+ * @param {{ onStatus?: (d: object) => void, onToken?: (d: { text: string }) => void, onDone?: (d: { report?: string, toolUsed?: string, evidence?: object }) => void, onError?: (d: { message?: string }) => void }} callbacks
+ */
+export const generatePlayerReportStream = async (player, callbacks = {}) => {
+  const token = getValidStoredToken();
+  const prompt = `Generate a scouting report for ${player.name_split} (${player.position}) on ${player.team}. Focus on role, strengths, weaknesses, and projection.`;
+  const res = await fetch(`${API_URL}/agent/report/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ message: prompt, player }),
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    const err = new Error("Unauthorized");
+    err.response = { status: res.status };
+    throw err;
+  }
+
+  if (!res.ok) {
+    const err = new Error(`Report stream failed: ${res.status}`);
+    err.response = { status: res.status };
+    throw err;
+  }
+
+  await consumeAgentSseResponse(res, callbacks);
+};
+
 export const resetAgentSession = async (sessionId) => {
   const token = getValidStoredToken();
   const res = await axios.post(

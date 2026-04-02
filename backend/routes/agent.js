@@ -40,6 +40,10 @@ const router = express.Router();
  *       500:
  *         description: Agent request failed
  */
+const writeSse = (res, event, data) => {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+};
+
 router.post("/chat", authenticateToken, async (req, res) => {
   try {
     const message =
@@ -76,6 +80,56 @@ router.post("/chat", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("Agent chat error:", err);
     return res.status(500).json({ error: "Agent chat request failed." });
+  }
+});
+
+router.post("/chat/stream", authenticateToken, async (req, res) => {
+  const message =
+    typeof req.body.message === "string" ? req.body.message.trim() : "";
+  const sessionId =
+    typeof req.body.sessionId === "string" ? req.body.sessionId.trim() : "";
+  const history = Array.isArray(req.body.history) ? req.body.history : [];
+  const userId = req.user.id;
+
+  if (!message) {
+    return res.status(400).json({ error: "Message is required." });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
+  const stream = {
+    write: (event, data) => writeSse(res, event, data),
+    lastToolUsed: "chat_request",
+  };
+
+  try {
+    await runChatAgent(message, {
+      sessionId,
+      history,
+      userId,
+      stream,
+    });
+    await recordUsageEvent({
+      userId,
+      provider: "internal",
+      model: "agent_request",
+      route: "/api/agent/chat/stream",
+      feature: stream.lastToolUsed || "chat_request",
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    });
+  } catch (err) {
+    console.error("Agent chat stream error:", err);
+    writeSse(res, "error", { message: "Agent chat request failed." });
+  } finally {
+    res.end();
   }
 });
 
@@ -164,6 +218,69 @@ router.post("/report", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("Agent report error:", err);
     return res.status(500).json({ error: "Agent report request failed." });
+  }
+});
+
+router.post("/report/stream", authenticateToken, async (req, res) => {
+  const message =
+    typeof req.body.message === "string" ? req.body.message.trim() : "";
+  const playerInput =
+    req.body.player && typeof req.body.player === "object"
+      ? req.body.player
+      : null;
+  const directPlayerId =
+    typeof req.body.playerId === "string" ? req.body.playerId.trim() : "";
+  const userId = req.user.id;
+
+  if (!message && !playerInput && !directPlayerId) {
+    return res
+      .status(400)
+      .json({ error: "message, player, or playerId is required." });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
+  const stream = {
+    write: (event, data) => writeSse(res, event, data),
+    lastToolUsed: "report_request",
+  };
+
+  try {
+    writeSse(res, "status", { phase: "thinking" });
+    const result = await runReportAgent({
+      message,
+      playerInput,
+      playerId: directPlayerId,
+      userId,
+      stream,
+    });
+    stream.lastToolUsed = result.toolUsed || stream.lastToolUsed;
+    writeSse(res, "done", {
+      report: result.report,
+      toolUsed: result.toolUsed,
+      evidence: result.evidence,
+    });
+    await recordUsageEvent({
+      userId,
+      provider: "internal",
+      model: "agent_request",
+      route: "/api/agent/report/stream",
+      feature: stream.lastToolUsed || "report_request",
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    });
+  } catch (err) {
+    console.error("Agent report stream error:", err);
+    writeSse(res, "error", { message: "Agent report request failed." });
+  } finally {
+    res.end();
   }
 });
 

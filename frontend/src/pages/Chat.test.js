@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import Chat from "./Chat";
 
 jest.mock("../api", () => ({
-  chatWithAgent: jest.fn(),
+  chatWithAgentStream: jest.fn(),
   resetAgentSession: jest.fn(),
 }));
 
@@ -13,19 +13,24 @@ jest.mock("../components/ChatMetricChart", () => (props) => (
 
 jest.mock("react-markdown", () => (props) => <>{props.children}</>);
 
-const { chatWithAgent } = require("../api");
+const { chatWithAgentStream } = require("../api");
 
 describe("Chat", () => {
   beforeEach(() => {
     localStorage.clear();
-    chatWithAgent.mockReset();
+    chatWithAgentStream.mockReset();
     window.HTMLElement.prototype.scrollIntoView = jest.fn();
   });
 
   test("sends a message and renders assistant text", async () => {
-    chatWithAgent.mockResolvedValue({
-      reply: "Cameron Boozer matches these archetypes: Modern Big.",
-      chartSpec: null,
+    chatWithAgentStream.mockImplementation(async (_message, _history, cbs) => {
+      const reply = "Cameron Boozer matches these archetypes: Modern Big.";
+      cbs.onToken({ text: reply });
+      cbs.onDone({
+        reply,
+        chartSpec: null,
+        toolUsed: "none",
+      });
     });
 
     render(<Chat onLogout={jest.fn()} />);
@@ -37,17 +42,25 @@ describe("Chat", () => {
     await userEvent.click(screen.getByRole("button", { name: /send/i }));
 
     expect(await screen.findByText(/modern big/i)).toBeInTheDocument();
-    expect(chatWithAgent).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /send/i })).not.toBeDisabled(),
+    );
+    expect(chatWithAgentStream).toHaveBeenCalledTimes(1);
   });
 
   test("renders a chart only when chartSpec is returned", async () => {
-    chatWithAgent.mockResolvedValue({
-      reply: "Here is a chart for Cameron Boozer using APG, PPG, RPG.",
-      chartSpec: {
-        title: "Cameron Boozer Metric Chart",
-        player: { unique_id: "1", name_split: "Cameron Boozer" },
-        metrics: [],
-      },
+    chatWithAgentStream.mockImplementation(async (_message, _history, cbs) => {
+      const reply = "Here is a chart for Cameron Boozer using APG, PPG, RPG.";
+      cbs.onToken({ text: reply });
+      cbs.onDone({
+        reply,
+        chartSpec: {
+          title: "Cameron Boozer Metric Chart",
+          player: { unique_id: "1", name_split: "Cameron Boozer" },
+          metrics: [],
+        },
+        toolUsed: "search_players+get_player_by_id+chart",
+      });
     });
 
     render(<Chat onLogout={jest.fn()} />);
@@ -59,11 +72,14 @@ describe("Chat", () => {
     await userEvent.click(screen.getByRole("button", { name: /send/i }));
 
     expect(await screen.findByTestId("chat-metric-chart")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /send/i })).not.toBeDisabled(),
+    );
   });
 
   test("logs out on auth failure", async () => {
     const onLogout = jest.fn();
-    chatWithAgent.mockRejectedValue({
+    chatWithAgentStream.mockRejectedValue({
       response: { status: 403 },
     });
 
