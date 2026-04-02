@@ -13,6 +13,10 @@ const router = express.Router();
 
 const PLAYER_DETAIL_COLUMNS = "*";
 
+/** PostgREST view: union of per-season snapshot tables (see docs/supabase/PLAYER_SEASON_HISTORY.sql). */
+const PLAYER_HISTORY_VIEW =
+  process.env.PLAYER_HISTORY_VIEW || "v_ncaa_players_d1_male_season_history";
+
 const normalizePercentLike = (value) => {
   const num = Number(value);
   if (!Number.isFinite(num)) return null;
@@ -263,6 +267,49 @@ router.get("/:id/similar", async (req, res) => {
   } catch (err) {
     console.error("Similar player lookup error:", err);
     return res.status(500).json({ error: "Similar player lookup failed." });
+  }
+});
+
+/**
+ * @swagger
+ * /api/players/{id}/history:
+ *   get:
+ *     tags: [Players]
+ *     summary: Season-by-season rows for a player (historical snapshot tables)
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Season history rows (newest last)
+ *       500:
+ *         description: Query failed (e.g. history view not created in Supabase)
+ */
+router.get("/:id/history", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: seasons, error } = await supabase
+      .from(PLAYER_HISTORY_VIEW)
+      .select(PLAYER_DETAIL_COLUMNS)
+      .eq("unique_id", id)
+      .order("season", { ascending: true });
+
+    if (error) {
+      console.error("Supabase history error:", error);
+      return res.status(500).json({
+        error:
+          "Failed to load season history. Create the view in Supabase (see backend/docs/supabase/PLAYER_SEASON_HISTORY.sql).",
+      });
+    }
+
+    return res.json({ seasons: seasons || [] });
+  } catch (err) {
+    console.error("Player history error:", err);
+    return res.status(500).json({ error: "Player history lookup failed." });
   }
 });
 

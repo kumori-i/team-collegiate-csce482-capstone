@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   getPlayer,
+  getPlayerHistory,
   generatePlayerReport,
   getSimilarPlayers,
   searchPlayers,
@@ -217,6 +218,8 @@ export default function PlayerDetails() {
   const [similarPortalOnly, setSimilarPortalOnly] = useState(true);
   const [isCompareLoading, setIsCompareLoading] = useState(false);
   const [compareError, setCompareError] = useState("");
+  const [seasonHistory, setSeasonHistory] = useState([]);
+  const [historyError, setHistoryError] = useState("");
   const archetypes = resolvePlayerArchetypes(player);
   const portalStatus = resolvePortalAvailability(player);
 
@@ -233,6 +236,31 @@ export default function PlayerDetails() {
       }
     };
     loadPlayer();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    const loadHistory = async () => {
+      setHistoryError("");
+      try {
+        const data = await getPlayerHistory(id);
+        if (!cancelled) {
+          setSeasonHistory(Array.isArray(data.seasons) ? data.seasons : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setSeasonHistory([]);
+          setHistoryError(
+            "Season history unavailable (create the view in Supabase or try again later).",
+          );
+        }
+      }
+    };
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const hydrateCompareMetadata = async (candidates) => {
@@ -572,6 +600,14 @@ export default function PlayerDetails() {
               </div>
             </div>
 
+            <div className="player-section player-history-section">
+              <h3 className="player-section-subtitle">Season history</h3>
+              {historyError ? (
+                <div className="player-history-note">{historyError}</div>
+              ) : null}
+              <SeasonHistoryTable rows={seasonHistory} />
+            </div>
+
             <div className="player-section">
               <h3 className="player-section-subtitle">Key Stats</h3>
               <div className="player-stats-grid">
@@ -592,6 +628,68 @@ export default function PlayerDetails() {
       </div>
     </div>
   );
+}
+
+function formatSeasonLabel(season) {
+  if (typeof season !== "string" || !season.includes("_")) return season;
+  const [a, b] = season.split("_");
+  if (!a || !b) return season;
+  return `${a}–${b}`;
+}
+
+function SeasonHistoryTable({ rows }) {
+  if (!rows.length) {
+    return (
+      <p className="player-history-empty">
+        No prior season rows found for this player in the history tables.
+      </p>
+    );
+  }
+
+  return (
+    <div className="player-history-table-wrap">
+      <table className="player-history-table">
+        <thead>
+          <tr>
+            <th>Season</th>
+            <th>Team</th>
+            <th>GP</th>
+            <th>PPG</th>
+            <th>RPG</th>
+            <th>APG</th>
+            <th>TS%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.season}-${row.unique_id || "row"}`}>
+              <td>{formatSeasonLabel(row.season)}</td>
+              <td>{row.team || "—"}</td>
+              <td>{formatStatNumber(row.g)}</td>
+              <td>{formatStatNumber(row.pts_g)}</td>
+              <td>{formatStatNumber(row.reb_g)}</td>
+              <td>{formatStatNumber(row.ast_g)}</td>
+              <td>{formatPercentCell(row.ts)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function formatStatNumber(value) {
+  if (value === null || value === undefined) return "—";
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(1) : "—";
+}
+
+function formatPercentCell(value) {
+  if (value === null || value === undefined) return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  const pct = n <= 1 ? n * 100 : n;
+  return `${pct.toFixed(1)}%`;
 }
 
 function StatCard({ label, value, isPercentage = false }) {

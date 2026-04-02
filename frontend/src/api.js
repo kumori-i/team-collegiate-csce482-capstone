@@ -93,6 +93,13 @@ export const getPlayer = async (id) => {
   return res.data;
 };
 
+export const getPlayerHistory = async (id) => {
+  const res = await axios.get(
+    `${API_URL}/players/${encodeURIComponent(id)}/history`,
+  );
+  return res.data;
+};
+
 export const getSimilarPlayers = async (
   id,
   { limit = 5, portalOnly = true } = {},
