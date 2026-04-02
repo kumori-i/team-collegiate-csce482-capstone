@@ -10,6 +10,10 @@ import {
   fetchPlayerSeasonHistory,
 } from "./playerHistory.js";
 import {
+  normalizeConversationHistoryLingo,
+  normalizeUserLingo,
+} from "./lingo.js";
+import {
   getArchetypePromptContext,
   isArchetypeQuestion,
   resolvePlayerArchetypes,
@@ -53,7 +57,9 @@ const attachSeasonHistoryForChat = async (uniqueId) => {
 
 const mergeSeasonHistoryIntoPlayerBundle = async (bundle) => {
   if (!bundle?.player?.unique_id) return bundle;
-  const seasonHistory = await attachSeasonHistoryForChat(bundle.player.unique_id);
+  const seasonHistory = await attachSeasonHistoryForChat(
+    bundle.player.unique_id,
+  );
   return { ...bundle, seasonHistory };
 };
 
@@ -86,6 +92,11 @@ const normalizeName = (value) =>
 
 const tokenizeName = (value = "") =>
   normalizeName(value).split(" ").filter(Boolean);
+
+const isPronounOnlyReference = (value = "") =>
+  /^(him|her|them|his|hers|their|theirs|that player|this player|same player|that one|this one)$/i.test(
+    String(value || "").trim(),
+  );
 
 const scoreNameSimilarity = (a = "", b = "") => {
   const aTokens = new Set(tokenizeName(a));
@@ -179,6 +190,51 @@ const isContextualPlayerReference = (message = "") =>
   /\b(him|her|them|that player|this player|same player|that one|this one)\b/i.test(
     String(message || ""),
   );
+
+const detectSeasonHistoryIntent = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  return (
+    /\bseason career\b/.test(text) ||
+    /\bcareer history\b/.test(text) ||
+    /\bseason history\b/.test(text) ||
+    /\bpast seasons?\b/.test(text) ||
+    /\bprior seasons?\b/.test(text) ||
+    /\byear[- ]over[- ]year\b/.test(text) ||
+    /\bprogression\b/.test(text) ||
+    (/\bcareer\b/.test(text) &&
+      !/\bcareer high\b|\bcareer best\b|\bcareer stats?\b/.test(text))
+  );
+};
+
+const extractSeasonHistoryPlayerNameFromMessage = (message = "") => {
+  const text = String(message || "").trim();
+  if (!text) return "";
+
+  const patterns = [
+    /\babout\s+(.+?)'?s\s+(?:season career|career history|season history|career|past seasons?|prior seasons?|progression)\b/i,
+    /\bfor\s+(.+?)'?s\s+(?:season career|career history|season history|career|past seasons?|prior seasons?|progression)\b/i,
+    /\b(.+?)'?s\s+(?:season career|career history|season history|career|past seasons?|prior seasons?|progression)\b/i,
+    /\bhow has\s+(.+?)\s+progressed\b/i,
+    /\btell me about\s+(.+?)\s+(?:career history|season history|past seasons?|prior seasons?|progression)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match?.[1]) continue;
+    const candidate = String(match[1] || "")
+      .replace(
+        /\b(reference|summarize|describe|tell me|show me|give me)\b/gi,
+        "",
+      )
+      .replace(/[,.!?]+$/g, "")
+      .trim();
+    if (candidate && tokenizeName(candidate).length >= 2) {
+      return candidate;
+    }
+  }
+
+  return "";
+};
 
 const extractSimilarPlayerNameFromMessage = (message = "") => {
   const text = String(message || "").trim();
@@ -287,7 +343,7 @@ const CHART_METRIC_DEFINITIONS = {
 };
 
 const CHART_METRIC_ALIASES = {
-  pts_g: ["pts_g", "ppg", "points per game", "points", "scoring"],
+  pts_g: ["pts_g", "ppg", "pgg", "points per game", "points", "scoring"],
   reb_g: ["reb_g", "rpg", "rgp", "rebounds per game", "rebounds", "boards"],
   ast_g: ["ast_g", "apg", "assists per game", "assists"],
   stl_g: ["stl_g", "spg", "steals per game", "steals"],
@@ -335,6 +391,89 @@ const extractMetricsFromMessageText = (message = "") => {
   return [...new Set(matches)];
 };
 
+const parseSeasonReference = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  const fullMatch = text.match(/\b(20\d{2}[-/_]\d{2})\b/);
+  if (fullMatch?.[1]) {
+    return fullMatch[1].replace(/[/_]/g, "-");
+  }
+  const shortMatch = text.match(/\b(\d{2})[-/_](\d{2})\b/);
+  if (!shortMatch) {
+    return "";
+  }
+  const startYear = Number(shortMatch[1]);
+  const endYear = shortMatch[2];
+  if (!Number.isFinite(startYear)) {
+    return "";
+  }
+  return `20${String(startYear).padStart(2, "0")}-${endYear}`;
+};
+
+const detectSeasonMetricQuestion = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  const season = parseSeasonReference(text);
+  if (!season) {
+    return null;
+  }
+  const metrics = extractMetricsFromMessageText(text);
+  const metric = metrics[0] || "";
+  if (!metric) {
+    return null;
+  }
+  return {
+    season,
+    metric,
+  };
+};
+
+const normalizeSeasonKey = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/[\/_]/g, "-")
+    .replace(/\s+/g, "");
+
+const inferSeasonMetricFromHistory = (history = []) => {
+  const normalized = Array.isArray(history) ? history : [];
+  for (let i = normalized.length - 1; i >= 0; i -= 1) {
+    const entry = normalized[i];
+    if (entry?.role !== "user") continue;
+    const metrics = extractMetricsFromMessageText(entry.content || "");
+    if (metrics.length > 0) {
+      return metrics[0];
+    }
+  }
+  return "";
+};
+
+const detectSeasonOnlyFollowup = (message = "", history = []) => {
+  const text = String(message || "").toLowerCase();
+  const season = parseSeasonReference(text);
+  if (!season) {
+    return null;
+  }
+  const hasExplicitMetric = extractMetricsFromMessageText(text).length > 0;
+  if (hasExplicitMetric) {
+    return null;
+  }
+  const followupLanguage =
+    /\bwhat about\b/.test(text) ||
+    /\bhow about\b/.test(text) ||
+    /\bwhat was it\b/.test(text) ||
+    /\bthat season\b/.test(text) ||
+    /\bin the\b.*\bseason\b/.test(text);
+  if (!followupLanguage) {
+    return null;
+  }
+  const metric = inferSeasonMetricFromHistory(history);
+  if (!metric) {
+    return null;
+  }
+  return {
+    season,
+    metric,
+  };
+};
+
 const detectChartIntent = (message = "") =>
   /\bchart\b|\bcharts\b|\bgraph\b|\bplot\b|\bvisualize\b|\bvisualization\b|\bradar\b/.test(
     String(message || "").toLowerCase(),
@@ -361,7 +500,8 @@ const detectPlayerHistoryCareerIntent = (message = "") => {
   return (
     /\b(histor(y|ies)|career|past seasons?|prior seasons?|previous seasons?|multi[- ]?season|year[- ]?over[- ]?year|yoy|progression|trajectory|development|freshman|sophomore|junior|senior)\b/.test(
       text,
-    ) || /\bhow\s+(has|have|did)\b.*\b(changed|improved|progressed)\b/.test(text)
+    ) ||
+    /\bhow\s+(has|have|did)\b.*\b(changed|improved|progressed)\b/.test(text)
   );
 };
 
@@ -1185,24 +1325,29 @@ export const runChatAgent = async (
   }
 
   const safeSessionId = sanitizeSessionId(sessionId);
-  const normalizedHistory = normalizeConversationHistory(history);
+  const normalizedMessage = normalizeUserLingo(message);
+  const normalizedHistory = normalizeConversationHistory(
+    normalizeConversationHistoryLingo(history),
+  );
   const historyText = formatConversationHistory(normalizedHistory);
   const reportIntent =
     /\b(report|scouting report|scout report|write up|write-up|player report)\b/i.test(
-      message,
+      normalizedMessage,
     );
 
-  if (detectChartIntent(message)) {
-    const chartRequest = await extractChartRequest(message, {
+  if (detectChartIntent(normalizedMessage)) {
+    const chartRequest = await extractChartRequest(normalizedMessage, {
       historyText,
       userId,
     });
-    const extractedTarget = await extractPlayerLookupTarget(message, {
+    const extractedTarget = await extractPlayerLookupTarget(normalizedMessage, {
       historyText,
       userId,
     });
-    const deterministicChartTarget = extractChartPlayerNameFromMessage(message);
-    const deterministicMetrics = extractMetricsFromMessageText(message);
+    const deterministicChartTarget =
+      extractChartPlayerNameFromMessage(normalizedMessage);
+    const deterministicMetrics =
+      extractMetricsFromMessageText(normalizedMessage);
     const chartTargetName =
       deterministicChartTarget ||
       chartRequest?.playerName ||
@@ -1311,11 +1456,11 @@ export const runChatAgent = async (
 
   if (reportIntent) {
     const rememberedPlayer =
-      isContextualReportReference(message) && safeSessionId
+      isContextualReportReference(normalizedMessage) && safeSessionId
         ? getSessionPlayer(safeSessionId)
         : null;
     const delegated = await runReportAgent({
-      message,
+      message: normalizedMessage,
       playerInput: rememberedPlayer,
       conversationHistoryText: historyText,
       userId,
@@ -1337,7 +1482,276 @@ export const runChatAgent = async (
     });
   }
 
-  const cohortMetricFollowup = detectCohortMetricFollowup(message);
+  const explicitSeasonMetricQuestion =
+    detectSeasonMetricQuestion(normalizedMessage);
+  const inheritedSeasonMetricQuestion = detectSeasonOnlyFollowup(
+    normalizedMessage,
+    normalizedHistory,
+  );
+  const seasonMetricQuestion =
+    explicitSeasonMetricQuestion || inheritedSeasonMetricQuestion;
+  if (seasonMetricQuestion) {
+    const extractedTarget = await extractPlayerLookupTarget(normalizedMessage, {
+      historyText,
+      userId,
+    });
+    const deterministicTarget =
+      extractSeasonHistoryPlayerNameFromMessage(normalizedMessage);
+    const rememberedPlayer = safeSessionId
+      ? getSessionPlayer(safeSessionId)
+      : null;
+    const safeDeterministicTarget = isPronounOnlyReference(deterministicTarget)
+      ? ""
+      : deterministicTarget;
+    const safeExtractedPlayerName = isPronounOnlyReference(
+      extractedTarget?.playerName,
+    )
+      ? ""
+      : extractedTarget?.playerName || "";
+    const isSeasonOnlyContinuation = Boolean(inheritedSeasonMetricQuestion);
+    const searchTarget =
+      safeDeterministicTarget ||
+      safeExtractedPlayerName ||
+      (rememberedPlayer?.name_split &&
+      (isSeasonOnlyContinuation ||
+        isContextualPlayerReference(normalizedMessage) ||
+        /\b(his|her|their)\b/i.test(normalizedMessage))
+        ? rememberedPlayer.name_split
+        : "");
+
+    if (!searchTarget) {
+      return {
+        reply:
+          "I can look up a season-specific stat, but I need a specific player name first.",
+        toolUsed: "none",
+        evidence: null,
+        chartSpec: null,
+      };
+    }
+
+    const toolResult = await resolvePlayerSearchForChat({
+      query: searchTarget,
+      team:
+        extractedTarget?.team ||
+        (rememberedPlayer?.name_split === searchTarget
+          ? rememberedPlayer.team
+          : ""),
+      position:
+        extractedTarget?.position ||
+        (rememberedPlayer?.name_split === searchTarget
+          ? rememberedPlayer.position
+          : ""),
+      limit: 10,
+    });
+
+    if (
+      toolResult.tool === "search_players+get_player_by_id" &&
+      toolResult.result?.player
+    ) {
+      const player = toolResult.result.player;
+      const seasonHistory = toolResult.result.seasonHistory || {
+        seasons: [],
+        identityMissing: false,
+      };
+      setSessionPlayer(safeSessionId, player);
+      const targetSeasonKey = normalizeSeasonKey(seasonMetricQuestion.season);
+
+      const matchingSeason = Array.isArray(seasonHistory.seasons)
+        ? seasonHistory.seasons.find(
+            (row) => normalizeSeasonKey(row?.season) === targetSeasonKey,
+          )
+        : null;
+
+      if (!matchingSeason) {
+        return {
+          reply: `I found ${player.name_split}, but I do not have season history for the ${seasonMetricQuestion.season} season in the database.`,
+          toolUsed: "search_players+get_player_by_id+season_metric",
+          evidence: toolResult.result,
+          chartSpec: null,
+        };
+      }
+
+      const rawValue = matchingSeason?.[seasonMetricQuestion.metric];
+      if (rawValue === null || rawValue === undefined || rawValue === "") {
+        return {
+          reply: `I found ${player.name_split} for ${seasonMetricQuestion.season}, but ${metricLabel(seasonMetricQuestion.metric)} is unavailable for that season in the database.`,
+          toolUsed: "search_players+get_player_by_id+season_metric",
+          evidence: toolResult.result,
+          chartSpec: null,
+        };
+      }
+
+      return {
+        reply: `${player.name_split}'s ${metricLabel(seasonMetricQuestion.metric)} in the ${seasonMetricQuestion.season} season was ${formatMetricValue(seasonMetricQuestion.metric, rawValue)}.`,
+        toolUsed: "search_players+get_player_by_id+season_metric",
+        evidence: {
+          player: {
+            unique_id: player.unique_id,
+            name_split: player.name_split,
+            team: player.team,
+            position: player.position,
+          },
+          season: seasonMetricQuestion.season,
+          metric: seasonMetricQuestion.metric,
+          value: rawValue,
+        },
+        chartSpec: null,
+      };
+    }
+
+    if (
+      toolResult.tool === "search_players" &&
+      (toolResult.result?.ambiguity === "duplicate_exact_name" ||
+        toolResult.result?.ambiguity === "similar_name_candidates")
+    ) {
+      const candidates = toolResult.result.candidates || [];
+      const candidateSummary = candidates
+        .slice(0, 5)
+        .map(
+          (p, idx) =>
+            `${idx + 1}. ${p.name_split} - ${p.team || "Unknown team"} (${p.position || "N/A"}) [id: ${p.unique_id}]`,
+        )
+        .join("\n");
+
+      return {
+        reply:
+          toolResult.result.ambiguity === "duplicate_exact_name"
+            ? `I found multiple players with the exact name "${toolResult.result.query}". Please clarify which one you mean:\n${candidateSummary}\n\nYou can reply with the player id, team, or position.`
+            : `I couldn't find an exact name match for "${toolResult.result.query}", but I found similar players:\n${candidateSummary}\n\nWhich player did you mean? You can reply with the player id, team, or position.`,
+        toolUsed: toolResult.tool,
+        evidence: toolResult.result,
+        chartSpec: null,
+      };
+    }
+  }
+
+  if (detectSeasonHistoryIntent(normalizedMessage)) {
+    const extractedTarget = await extractPlayerLookupTarget(normalizedMessage, {
+      historyText,
+      userId,
+    });
+    const deterministicTarget =
+      extractSeasonHistoryPlayerNameFromMessage(normalizedMessage);
+    const rememberedPlayer = safeSessionId
+      ? getSessionPlayer(safeSessionId)
+      : null;
+    const safeDeterministicTarget = isPronounOnlyReference(deterministicTarget)
+      ? ""
+      : deterministicTarget;
+    const safeExtractedPlayerName = isPronounOnlyReference(
+      extractedTarget?.playerName,
+    )
+      ? ""
+      : extractedTarget?.playerName || "";
+    const searchTarget =
+      safeDeterministicTarget ||
+      safeExtractedPlayerName ||
+      (rememberedPlayer?.name_split &&
+      (new RegExp(`\\b${rememberedPlayer.name_split.toLowerCase()}\\b`).test(
+        normalizedMessage.toLowerCase(),
+      ) ||
+        isContextualPlayerReference(normalizedMessage) ||
+        /\b(his|her|their)\b/i.test(normalizedMessage))
+        ? rememberedPlayer.name_split
+        : "");
+
+    if (!searchTarget) {
+      return {
+        reply:
+          "I can summarize a player's season career, but I need a specific player name first.",
+        toolUsed: "none",
+        evidence: null,
+        chartSpec: null,
+      };
+    }
+
+    const toolResult = await resolvePlayerSearchForChat({
+      query: searchTarget,
+      team:
+        extractedTarget?.team ||
+        (rememberedPlayer?.name_split === searchTarget
+          ? rememberedPlayer.team
+          : ""),
+      position:
+        extractedTarget?.position ||
+        (rememberedPlayer?.name_split === searchTarget
+          ? rememberedPlayer.position
+          : ""),
+      limit: 10,
+    });
+
+    if (
+      toolResult.tool === "search_players+get_player_by_id" &&
+      toolResult.result?.player
+    ) {
+      const player = toolResult.result.player;
+      setSessionPlayer(safeSessionId, player);
+      const replyPrompt = `You are the chat agent for a basketball analytics app.
+You must use ONLY the tool result below for factual claims.
+Do NOT use outside knowledge, assumptions, or any external data.
+
+User message:
+${message}
+
+Tool used: ${toolResult.tool}
+Tool result JSON:
+${JSON.stringify(toolResult.result)}
+Conversation context:
+${historyText}
+
+Instructions:
+- Summarize the player's current season from the player row.
+- If seasonHistory.seasons exists and has rows, summarize the player's season-by-season progression briefly.
+- If seasonHistory.seasons is empty or identityMissing is true, explicitly say prior season history is unavailable from the database.
+- Keep the answer concise and directly responsive to the user's request.`;
+      const reply = await generateWithProvider(replyPrompt, {
+        userId,
+        route: "/api/agent/chat",
+        feature: "season_history_reply",
+      });
+      return {
+        reply,
+        toolUsed: "search_players+get_player_by_id+season_history",
+        evidence: toolResult.result,
+        chartSpec: null,
+      };
+    }
+
+    if (
+      toolResult.tool === "search_players" &&
+      (toolResult.result?.ambiguity === "duplicate_exact_name" ||
+        toolResult.result?.ambiguity === "similar_name_candidates")
+    ) {
+      const candidates = toolResult.result.candidates || [];
+      const candidateSummary = candidates
+        .slice(0, 5)
+        .map(
+          (p, idx) =>
+            `${idx + 1}. ${p.name_split} - ${p.team || "Unknown team"} (${p.position || "N/A"}) [id: ${p.unique_id}]`,
+        )
+        .join("\n");
+
+      return {
+        reply:
+          toolResult.result.ambiguity === "duplicate_exact_name"
+            ? `I found multiple players with the exact name "${toolResult.result.query}". Please clarify which one you mean:\n${candidateSummary}\n\nYou can reply with the player id, team, or position.`
+            : `I couldn't find an exact name match for "${toolResult.result.query}", but I found similar players:\n${candidateSummary}\n\nWhich player did you mean? You can reply with the player id, team, or position.`,
+        toolUsed: toolResult.tool,
+        evidence: toolResult.result,
+        chartSpec: null,
+      };
+    }
+
+    return {
+      reply:
+        "I could not find that player well enough to summarize the season career. Please give the full player name.",
+      toolUsed: toolResult.tool,
+      evidence: toolResult.result,
+      chartSpec: null,
+    };
+  }
+
+  const cohortMetricFollowup = detectCohortMetricFollowup(normalizedMessage);
   if (cohortMetricFollowup) {
     const rememberedCohort = getSessionCohort(safeSessionId);
     if (rememberedCohort.length > 0) {
@@ -1380,24 +1794,33 @@ export const runChatAgent = async (
     }
   }
 
-  const similarPlayersIntent = detectSimilarPlayersIntent(message);
+  const similarPlayersIntent = detectSimilarPlayersIntent(normalizedMessage);
   if (similarPlayersIntent) {
-    const extractedTarget = await extractPlayerLookupTarget(message, {
+    const extractedTarget = await extractPlayerLookupTarget(normalizedMessage, {
       historyText,
       userId,
     });
-    const deterministicTarget = extractSimilarPlayerNameFromMessage(message);
+    const deterministicTarget =
+      extractSimilarPlayerNameFromMessage(normalizedMessage);
     const rememberedPlayer = safeSessionId
       ? getSessionPlayer(safeSessionId)
       : null;
+    const safeDeterministicTarget = isPronounOnlyReference(deterministicTarget)
+      ? ""
+      : deterministicTarget;
+    const safeExtractedPlayerName = isPronounOnlyReference(
+      extractedTarget?.playerName,
+    )
+      ? ""
+      : extractedTarget?.playerName || "";
     const searchTarget =
-      deterministicTarget ||
-      extractedTarget?.playerName ||
+      safeDeterministicTarget ||
+      safeExtractedPlayerName ||
       (rememberedPlayer?.name_split &&
       (new RegExp(`\\b${rememberedPlayer.name_split.toLowerCase()}\\b`).test(
-        message.toLowerCase(),
+        normalizedMessage.toLowerCase(),
       ) ||
-        isContextualPlayerReference(message))
+        isContextualPlayerReference(normalizedMessage))
         ? rememberedPlayer.name_split
         : "");
 
@@ -1514,14 +1937,19 @@ export const runChatAgent = async (
     });
   }
 
-  if (isArchetypeQuestion(message)) {
-    const extractedTarget = await extractPlayerLookupTarget(message, {
+  if (isArchetypeQuestion(normalizedMessage)) {
+    const extractedTarget = await extractPlayerLookupTarget(normalizedMessage, {
       historyText,
     });
+    const safeExtractedPlayerName = isPronounOnlyReference(
+      extractedTarget?.playerName,
+    )
+      ? ""
+      : extractedTarget?.playerName || "";
 
-    if (extractedTarget?.playerName) {
+    if (safeExtractedPlayerName) {
       const toolResult = await resolvePlayerSearchForChat({
-        query: extractedTarget.playerName,
+        query: safeExtractedPlayerName,
         team: extractedTarget.team || "",
         position: extractedTarget.position || "",
         limit: 10,
@@ -1602,7 +2030,8 @@ Return a concise, helpful response.`;
     });
   }
 
-  const metricByPositionIntent = detectTopMetricByPositionIntent(message);
+  const metricByPositionIntent =
+    detectTopMetricByPositionIntent(normalizedMessage);
   if (metricByPositionIntent) {
     const topMetricResult = await runToolPlan({
       tool: "top_players",
@@ -1644,7 +2073,8 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     });
   }
 
-  const compositePositionIntent = detectCompositePositionIntent(message);
+  const compositePositionIntent =
+    detectCompositePositionIntent(normalizedMessage);
   if (compositePositionIntent) {
     const compositeResult = await runToolPlan({
       tool: "top_players_by_position",
@@ -1686,23 +2116,23 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     });
   }
 
-  let plan = await decideChatTool(message, { historyText, userId });
+  let plan = await decideChatTool(normalizedMessage, { historyText, userId });
 
   if (plan.tool === "get_player_by_id" && !plan.args?.id) {
     const remembered = getSessionPlayer(safeSessionId);
     const contextual =
-      isContextualPlayerReference(message) ||
-      isContextualReportReference(message);
+      isContextualPlayerReference(normalizedMessage) ||
+      isContextualReportReference(normalizedMessage);
     if (remembered?.unique_id && contextual) {
       plan = { tool: "get_player_by_id", args: { id: remembered.unique_id } };
     } else {
-      const extracted = await extractPlayerLookupTarget(message, {
+      const extracted = await extractPlayerLookupTarget(normalizedMessage, {
         historyText,
         userId,
       });
       const query =
         (extracted?.playerName || "").trim() ||
-        extractPlayerNameFromHistoryOrCareerMessage(message);
+        extractPlayerNameFromHistoryOrCareerMessage(normalizedMessage);
       if (query) {
         plan = {
           tool: "search_players",
@@ -1721,11 +2151,11 @@ If tool result is empty, say there is not enough database evidence and ask a cla
 
   if (plan.tool === "none") {
     const [reportExtract, lookupExtract] = await Promise.all([
-      extractReportTarget(message, {
+      extractReportTarget(normalizedMessage, {
         historyText,
         userId,
       }),
-      extractPlayerLookupTarget(message, {
+      extractPlayerLookupTarget(normalizedMessage, {
         historyText,
         userId,
       }),
@@ -1733,11 +2163,11 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     const mergedName =
       (lookupExtract?.playerName || "").trim() ||
       (reportExtract?.playerName || "").trim() ||
-      extractPlayerNameFromHistoryOrCareerMessage(message) ||
-      (detectPlayerHistoryCareerIntent(message) &&
-      (isContextualPlayerReference(message) ||
-        isContextualReportReference(message)) &&
-      getSessionPlayer(safeSessionId)?.name_split) ||
+      extractPlayerNameFromHistoryOrCareerMessage(normalizedMessage) ||
+      (detectPlayerHistoryCareerIntent(normalizedMessage) &&
+        (isContextualPlayerReference(normalizedMessage) ||
+          isContextualReportReference(normalizedMessage)) &&
+        getSessionPlayer(safeSessionId)?.name_split) ||
       "";
     if (mergedName) {
       plan = {
@@ -1807,8 +2237,8 @@ Return a concise, helpful response grounded only in the tool result.`;
   const originalQuery = toolResult.result?.query;
   const needsResolvedNamePrefix = Boolean(
     resolvedName &&
-      originalQuery &&
-      normalizeName(resolvedName) !== normalizeName(originalQuery),
+    originalQuery &&
+    normalizeName(resolvedName) !== normalizeName(originalQuery),
   );
   const resolvedNamePrefix = needsResolvedNamePrefix
     ? `I used "${resolvedName}" as the closest matching player name.\n\n`
@@ -1841,6 +2271,7 @@ export const runReportAgent = async ({
   userId = "",
   stream = null,
 }) => {
+  const normalizedMessage = normalizeUserLingo(message);
   let evidence = {};
   let toolUsed = "none";
 
@@ -1870,7 +2301,7 @@ export const runReportAgent = async ({
     };
     toolUsed = "search_players";
   } else {
-    const extracted = await extractReportTarget(message, {
+    const extracted = await extractReportTarget(normalizedMessage, {
       historyText: conversationHistoryText,
       userId,
     });
@@ -1892,7 +2323,9 @@ export const runReportAgent = async ({
       if (bestMatch?.unique_id) {
         logToolInvocation("get_player_by_id", { id: bestMatch.unique_id });
         const player = await getPlayer(bestMatch.unique_id);
-        const seasonHistory = await attachSeasonHistoryForChat(bestMatch.unique_id);
+        const seasonHistory = await attachSeasonHistoryForChat(
+          bestMatch.unique_id,
+        );
         evidence = {
           extractedTarget: extracted,
           bestMatch,
@@ -1911,7 +2344,7 @@ export const runReportAgent = async ({
     }
 
     if (toolUsed === "none") {
-      const plan = await decideChatTool(message, {
+      const plan = await decideChatTool(normalizedMessage, {
         historyText: conversationHistoryText,
         userId,
       });
@@ -1920,7 +2353,7 @@ export const runReportAgent = async ({
           ? { tool: "top_players", args: { metric: "pts_g", limit: 10 } }
           : plan,
       );
-      evidence = { userRequest: message, result: toolResult.result };
+      evidence = { userRequest: normalizedMessage, result: toolResult.result };
       toolUsed = toolResult.tool;
     }
   }
@@ -1933,7 +2366,7 @@ If data is incomplete, explicitly state limitations.
 If evidence includes seasonHistory.seasons, you may add a short "Career / prior seasons" section grounded only in those rows; if identityMissing or empty, omit or note that prior seasons are unavailable.
 
 User request:
-${message || "Generate a scouting report from provided player data."}
+${normalizedMessage || "Generate a scouting report from provided player data."}
 Conversation context:
 ${conversationHistoryText}
 ${ARCHETYPE_PROMPT_CONTEXT}

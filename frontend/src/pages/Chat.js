@@ -85,6 +85,7 @@ export default function Chat({ onLogout }) {
   const [awaitingFirstToken, setAwaitingFirstToken] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     setMessages(loadMessagesForSession(sessionId));
@@ -99,6 +100,12 @@ export default function Chat({ onLogout }) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isLoading, awaitingFirstToken]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading]);
 
   const handleResetChat = async () => {
     if (isLoading) return;
@@ -117,6 +124,7 @@ export default function Chat({ onLogout }) {
     setMessages([]);
     setNewMessage("");
     setError("");
+    inputRef.current?.focus();
   };
 
   const handleSendMessage = async (e) => {
@@ -289,6 +297,7 @@ export default function Chat({ onLogout }) {
 
         <form onSubmit={handleSendMessage} className="chat-input-form">
           <input
+            ref={inputRef}
             type="text"
             placeholder="Type a message..."
             value={newMessage}
