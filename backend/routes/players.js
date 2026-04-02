@@ -1,6 +1,7 @@
 import express from "express";
 import { supabase } from "../supabase.js";
 import { runReportAgent } from "../services/agentRunner.js";
+import { fetchPlayerSeasonHistory } from "../services/playerHistory.js";
 
 const router = express.Router();
 
@@ -263,6 +264,48 @@ router.get("/:id/similar", async (req, res) => {
   } catch (err) {
     console.error("Similar player lookup error:", err);
     return res.status(500).json({ error: "Similar player lookup failed." });
+  }
+});
+
+/**
+ * @swagger
+ * /api/players/{id}/history:
+ *   get:
+ *     tags: [Players]
+ *     summary: Season-by-season rows matched by name/home/DOB (not unique_id)
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Current-season unique_id; server resolves identity column from ncaa_players_d1_male
+ *     responses:
+ *       200:
+ *         description: Season history rows (newest last); identityMissing if no match key on current row
+ *       404:
+ *         description: Player not found in current table
+ *       500:
+ *         description: Query failed (e.g. history view not created in Supabase)
+ */
+router.get("/:id/history", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await fetchPlayerSeasonHistory(id);
+    return res.json({
+      seasons: result.seasons,
+      identityMissing: result.identityMissing,
+      matchedBy: result.matchedBy,
+    });
+  } catch (err) {
+    if (err.code === "PGRST116") {
+      return res.status(404).json({ error: "Player not found" });
+    }
+    console.error("Player history error:", err);
+    return res.status(500).json({
+      error:
+        "Failed to load season history. Create the view in Supabase (see backend/docs/supabase/PLAYER_SEASON_HISTORY.sql).",
+    });
   }
 });
 

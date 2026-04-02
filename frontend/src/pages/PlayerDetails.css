@@ -583,3 +583,55 @@
     font-weight: 600;
     margin-top: 1rem;
 }
+
+.player-history-section {
+    margin-top: 1.5rem;
+}
+
+.player-history-note {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+}
+
+.player-history-empty {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.player-history-table-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+}
+
+.player-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.player-history-table th,
+.player-history-table td {
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+}
+
+.player-history-table th {
+    background: var(--surface-2);
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.72rem;
+}
+
+.player-history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.player-history-table td {
+    color: var(--text);
+}
