@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   getPlayer,
   getPlayerHistory,
-  generatePlayerReport,
+  generatePlayerReportStream,
   getSimilarPlayers,
   searchPlayers,
 } from "../api";
@@ -373,9 +373,21 @@ export default function PlayerDetails() {
     if (!player || isGenerating) return;
     setIsGenerating(true);
     setError("");
+    setReport("");
     try {
-      const data = await generatePlayerReport(player);
-      setReport(data.description || "");
+      await generatePlayerReportStream(player, {
+        onToken: ({ text }) => {
+          setReport((prev) => prev + text);
+        },
+        onDone: ({ report: fullReport }) => {
+          if (fullReport != null && String(fullReport).length > 0) {
+            setReport(String(fullReport));
+          }
+        },
+        onError: ({ message: errMsg }) => {
+          setError(errMsg || "Failed to generate scouting report.");
+        },
+      });
     } catch (err) {
       console.error("Failed to generate report", err);
       setError("Failed to generate scouting report. Please try again.");

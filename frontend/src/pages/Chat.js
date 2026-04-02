@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { chatWithAgent, resetAgentSession } from "../api";
+import { chatWithAgentStream, resetAgentSession } from "../api";
 import ChatMetricChart from "../components/ChatMetricChart";
 import "./Chat.css";
 
@@ -81,6 +81,8 @@ export default function Chat({ onLogout }) {
   );
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  /** True until the first token chunk or done/error for the in-flight assistant reply. */
+  const [awaitingFirstToken, setAwaitingFirstToken] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef(null);
 
@@ -96,7 +98,7 @@ export default function Chat({ onLogout }) {
     if (endRef.current) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, awaitingFirstToken]);
 
   const handleResetChat = async () => {
     if (isLoading) return;
@@ -130,30 +132,67 @@ export default function Chat({ onLogout }) {
       timestamp: now,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const historyForAgent = toAgentHistory([...messages, userMessage]);
+    const assistantId = Date.now() + 1;
+    const assistantTimestamp = new Date().toLocaleTimeString();
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      {
+        id: assistantId,
+        text: "",
+        sender: "Assistant",
+        timestamp: assistantTimestamp,
+        sources: [],
+        chartSpec: null,
+      },
+    ]);
     setNewMessage("");
     setError("");
     setIsLoading(true);
+    setAwaitingFirstToken(true);
 
     try {
-      const data = await chatWithAgent(trimmed, toAgentHistory(messages));
-      const assistantMessage = {
-        id: Date.now() + 1,
-        text: data.reply || "No response from assistant.",
-        sender: "Assistant",
-        timestamp: new Date().toLocaleTimeString(),
-        sources: data.sources || [],
-        chartSpec: data.chartSpec || null,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      await chatWithAgentStream(trimmed, historyForAgent, {
+        onToken: ({ text }) => {
+          setAwaitingFirstToken((was) => (was ? false : was));
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, text: (m.text || "") + text }
+                : m,
+            ),
+          );
+        },
+        onDone: (data) => {
+          setAwaitingFirstToken(false);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    text: data.reply ?? m.text ?? "",
+                    sources: data.sources ?? [],
+                    chartSpec: data.chartSpec ?? null,
+                  }
+                : m,
+            ),
+          );
+        },
+        onError: ({ message: errMsg }) => {
+          setAwaitingFirstToken(false);
+          setError(errMsg || "Chat request failed.");
+        },
+      });
     } catch (err) {
+      setAwaitingFirstToken(false);
       if (err.response?.status === 401 || err.response?.status === 403) {
         onLogout?.();
         return;
       }
       setError("Chat request failed. Please try again.");
       setMessages((prev) => [
-        ...prev,
+        ...prev.filter((m) => m.id !== assistantId),
         {
           id: Date.now() + 2,
           text: "Sorry, something went wrong while answering.",
@@ -163,6 +202,7 @@ export default function Chat({ onLogout }) {
       ]);
     } finally {
       setIsLoading(false);
+      setAwaitingFirstToken(false);
     }
   };
 
@@ -208,12 +248,25 @@ export default function Chat({ onLogout }) {
                 <div className="message-text">
                   {message.sender === "You" ? (
                     message.text
+                  ) : !(message.text || "").trim() &&
+                    !message.chartSpec &&
+                    awaitingFirstToken ? (
+                    <span
+                      className="assistant-loading"
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Loading response"
+                    >
+                      <span className="assistant-loading-spinner" aria-hidden />
+                    </span>
                   ) : (
-                    <ReactMarkdown>{message.text}</ReactMarkdown>
+                    <>
+                      <ReactMarkdown>{message.text}</ReactMarkdown>
+                      {message.chartSpec ? (
+                        <ChatMetricChart chartSpec={message.chartSpec} />
+                      ) : null}
+                    </>
                   )}
-                  {message.sender !== "You" && message.chartSpec ? (
-                    <ChatMetricChart chartSpec={message.chartSpec} />
-                  ) : null}
                 </div>
                 {message.sources?.length > 0 ? (
                   <div className="message-sources">

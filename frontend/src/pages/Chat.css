@@ -125,6 +125,28 @@
     line-height: 1.6;
 }
 
+.assistant-loading {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.5em;
+}
+
+.assistant-loading-spinner {
+    display: inline-block;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 2px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: assistant-spin 0.7s linear infinite;
+}
+
+@keyframes assistant-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .message-text p {
     margin: 0.35rem 0;
 }
