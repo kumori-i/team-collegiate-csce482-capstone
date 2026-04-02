@@ -1,6 +1,8 @@
 -- Season history: unions per-year NCAA D1 male tables into one queryable view.
 -- Run in Supabase SQL Editor after your season snapshot tables exist.
 -- Table names must match your project (see ncaa_players_d1_male_c_*_ncaa_div_i).
+-- Each snapshot table must include column name_home_dob (same as ncaa_players_d1_male);
+-- the API matches history rows using that column, not unique_id.
 
 CREATE OR REPLACE VIEW v_ncaa_players_d1_male_season_history AS
 SELECT t.*, '2021_22'::text AS season

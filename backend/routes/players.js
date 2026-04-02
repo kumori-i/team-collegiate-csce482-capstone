@@ -17,6 +17,15 @@ const PLAYER_DETAIL_COLUMNS = "*";
 const PLAYER_HISTORY_VIEW =
   process.env.PLAYER_HISTORY_VIEW || "v_ncaa_players_d1_male_season_history";
 
+/** Column used to match current player to historical rows (stable across seasons; not unique_id). */
+const PLAYER_HISTORY_MATCH_COLUMN =
+  process.env.PLAYER_HISTORY_MATCH_COLUMN || "name_home_dob";
+
+const normalizeHistoryIdentityKey = (raw) => {
+  if (raw === null || raw === undefined) return "";
+  return String(raw).trim();
+};
+
 const normalizePercentLike = (value) => {
   const num = Number(value);
   if (!Number.isFinite(num)) return null;
@@ -275,27 +284,54 @@ router.get("/:id/similar", async (req, res) => {
  * /api/players/{id}/history:
  *   get:
  *     tags: [Players]
- *     summary: Season-by-season rows for a player (historical snapshot tables)
+ *     summary: Season-by-season rows matched by name/home/DOB (not unique_id)
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
+ *         description: Current-season unique_id; server resolves identity column from ncaa_players_d1_male
  *     responses:
  *       200:
- *         description: Season history rows (newest last)
+ *         description: Season history rows (newest last); identityMissing if no match key on current row
+ *       404:
+ *         description: Player not found in current table
  *       500:
  *         description: Query failed (e.g. history view not created in Supabase)
  */
 router.get("/:id/history", async (req, res) => {
   try {
     const { id } = req.params;
+    const matchCol = PLAYER_HISTORY_MATCH_COLUMN;
+
+    const { data: current, error: playerError } = await supabase
+      .from("ncaa_players_d1_male")
+      .select(matchCol)
+      .eq("unique_id", id)
+      .single();
+
+    if (playerError) {
+      if (playerError.code === "PGRST116") {
+        return res.status(404).json({ error: "Player not found" });
+      }
+      console.error("Supabase error (history identity):", playerError);
+      return res.status(500).json({ error: "Failed to resolve player identity" });
+    }
+
+    const identityKey = normalizeHistoryIdentityKey(current?.[matchCol]);
+    if (!identityKey) {
+      return res.json({
+        seasons: [],
+        identityMissing: true,
+        matchedBy: matchCol,
+      });
+    }
 
     const { data: seasons, error } = await supabase
       .from(PLAYER_HISTORY_VIEW)
       .select(PLAYER_DETAIL_COLUMNS)
-      .eq("unique_id", id)
+      .eq(matchCol, identityKey)
       .order("season", { ascending: true });
 
     if (error) {
@@ -306,7 +342,11 @@ router.get("/:id/history", async (req, res) => {
       });
     }
 
-    return res.json({ seasons: seasons || [] });
+    return res.json({
+      seasons: seasons || [],
+      identityMissing: false,
+      matchedBy: matchCol,
+    });
   } catch (err) {
     console.error("Player history error:", err);
     return res.status(500).json({ error: "Player history lookup failed." });

@@ -220,6 +220,7 @@ export default function PlayerDetails() {
   const [compareError, setCompareError] = useState("");
   const [seasonHistory, setSeasonHistory] = useState([]);
   const [historyError, setHistoryError] = useState("");
+  const [historyIdentityMissing, setHistoryIdentityMissing] = useState(false);
   const archetypes = resolvePlayerArchetypes(player);
   const portalStatus = resolvePortalAvailability(player);
 
@@ -243,14 +244,17 @@ export default function PlayerDetails() {
     let cancelled = false;
     const loadHistory = async () => {
       setHistoryError("");
+      setHistoryIdentityMissing(false);
       try {
         const data = await getPlayerHistory(id);
         if (!cancelled) {
           setSeasonHistory(Array.isArray(data.seasons) ? data.seasons : []);
+          setHistoryIdentityMissing(Boolean(data.identityMissing));
         }
       } catch {
         if (!cancelled) {
           setSeasonHistory([]);
+          setHistoryIdentityMissing(false);
           setHistoryError(
             "Season history unavailable (create the view in Supabase or try again later).",
           );
@@ -605,7 +609,17 @@ export default function PlayerDetails() {
               {historyError ? (
                 <div className="player-history-note">{historyError}</div>
               ) : null}
-              <SeasonHistoryTable rows={seasonHistory} />
+              {historyIdentityMissing && !historyError ? (
+                <div className="player-history-note">
+                  This player record has no <code>name_home_dob</code> value, so
+                  past seasons cannot be matched. Ensure the column is populated
+                  on the current and historical tables.
+                </div>
+              ) : null}
+              <SeasonHistoryTable
+                rows={seasonHistory}
+                identityMissing={historyIdentityMissing}
+              />
             </div>
 
             <div className="player-section">
@@ -637,11 +651,13 @@ function formatSeasonLabel(season) {
   return `${a}–${b}`;
 }
 
-function SeasonHistoryTable({ rows }) {
+function SeasonHistoryTable({ rows, identityMissing = false }) {
   if (!rows.length) {
     return (
       <p className="player-history-empty">
-        No prior season rows found for this player in the history tables.
+        {identityMissing
+          ? ""
+          : "No prior season rows found for this player in the history tables (check that name_home_dob matches across seasons)."}
       </p>
     );
   }
@@ -661,8 +677,10 @@ function SeasonHistoryTable({ rows }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={`${row.season}-${row.unique_id || "row"}`}>
+          {rows.map((row, idx) => (
+            <tr
+              key={`${row.season}-${row.name_home_dob || row.unique_id || idx}`}
+            >
               <td>{formatSeasonLabel(row.season)}</td>
               <td>{row.team || "—"}</td>
               <td>{formatStatNumber(row.g)}</td>
