@@ -6,6 +6,10 @@ import {
   searchPlayers,
 } from "./agentTools.js";
 import {
+  compactSeasonHistoryForLLM,
+  fetchPlayerSeasonHistory,
+} from "./playerHistory.js";
+import {
   getArchetypePromptContext,
   isArchetypeQuestion,
   resolvePlayerArchetypes,
@@ -24,6 +28,33 @@ const logToolInvocation = (tool, args = {}) => {
   } catch {
     console.log(`[agentRunner] tool_call=${tool} args=[unserializable]`);
   }
+};
+
+/** Compact season rows for LLM; never throws. */
+const attachSeasonHistoryForChat = async (uniqueId) => {
+  if (!uniqueId) {
+    return { seasons: [], identityMissing: true };
+  }
+  try {
+    const raw = await fetchPlayerSeasonHistory(uniqueId);
+    return {
+      identityMissing: raw.identityMissing,
+      matchedBy: raw.matchedBy,
+      seasons: compactSeasonHistoryForLLM(raw.seasons),
+    };
+  } catch (e) {
+    if (e.code === "PGRST116") {
+      return { seasons: [], identityMissing: true };
+    }
+    console.error("[agentRunner] attachSeasonHistoryForChat", e);
+    return { seasons: [], identityMissing: false, fetchError: true };
+  }
+};
+
+const mergeSeasonHistoryIntoPlayerBundle = async (bundle) => {
+  if (!bundle?.player?.unique_id) return bundle;
+  const seasonHistory = await attachSeasonHistoryForChat(bundle.player.unique_id);
+  return { ...bundle, seasonHistory };
 };
 
 const parseJsonFromModel = (text) => {
@@ -582,7 +613,7 @@ const extractPrimaryPlayerFromToolResult = (toolResult = {}) => {
     return result.player || result.bestMatch || null;
   }
   if (tool === "get_player_by_id") {
-    return result;
+    return result?.player ?? result;
   }
   if (tool === "top_players") {
     return result.players?.[0] || null;
@@ -611,7 +642,8 @@ const extractCohortFromToolResult = (toolResult = {}) => {
     return result.player ? [result.player] : [];
   }
   if (tool === "get_player_by_id") {
-    return [result];
+    const p = result?.player ?? result;
+    return p ? [p] : [];
   }
   if (
     tool === "search_players" &&
@@ -734,14 +766,14 @@ const resolvePlayerSearchForChat = async (args = {}) => {
     const player = await getPlayer(exactMatches[0].unique_id);
     return {
       tool: "search_players+get_player_by_id",
-      result: {
+      result: await mergeSeasonHistoryIntoPlayerBundle({
         query,
         bestMatch: exactMatches[0],
         resolution: "exact",
         resolvedName: exactMatches[0].name_split,
         player,
         candidateMatches: matches.slice(0, 5),
-      },
+      }),
     };
   }
 
@@ -768,13 +800,13 @@ const resolvePlayerSearchForChat = async (args = {}) => {
     const player = await getPlayer(matches[0].unique_id);
     return {
       tool: "search_players+get_player_by_id",
-      result: {
+      result: await mergeSeasonHistoryIntoPlayerBundle({
         query,
         bestMatch: matches[0],
         resolution: "single_candidate",
         resolvedName: matches[0].name_split,
         player,
-      },
+      }),
     };
   }
 
@@ -817,14 +849,14 @@ const resolvePlayerSearchForChat = async (args = {}) => {
       const player = await getPlayer(chosen.unique_id);
       return {
         tool: "search_players+get_player_by_id",
-        result: {
+        result: await mergeSeasonHistoryIntoPlayerBundle({
           query,
           bestMatch: chosen,
           resolution: "fuzzy_single",
           resolvedName: chosen.name_split,
           player,
           candidateMatches: ranked.slice(0, 5).map((entry) => entry.player),
-        },
+        }),
       };
     }
 
@@ -957,7 +989,7 @@ Return ONLY valid JSON with this schema:
 
 Guidelines:
 - Use "search_players" when user asks to find players by name/team/position.
-- Use "get_player_by_id" only if user explicitly provides an id.
+- Use "get_player_by_id" if user explicitly provides an id, or when they ask about career history, past seasons, year-over-year change, or progression (season snapshot data is attached automatically when available).
 - Use "top_players" when user asks for top/best/ranking by a metric.
 - Use "top_players_by_position" when user asks for best/top/most effective players at a position.
 - "effective_players" is a legacy alias for "top_players_by_position".
@@ -1018,7 +1050,8 @@ export const runToolPlan = async (plan) => {
   if (plan.tool === "get_player_by_id" && args.id) {
     logToolInvocation("get_player_by_id", { id: args.id });
     const player = await getPlayer(args.id);
-    return { tool: "get_player_by_id", result: player };
+    const seasonHistory = await attachSeasonHistoryForChat(args.id);
+    return { tool: "get_player_by_id", result: { player, seasonHistory } };
   }
 
   if (plan.tool === "top_players") {
@@ -1628,6 +1661,7 @@ If tool result is empty, say there is not enough database evidence and ask a cla
 You must use ONLY the tool result below for factual claims.
 Do NOT use outside knowledge, assumptions, or any external data.
 If the tool result is null/empty or does not contain enough data, say you do not have enough database evidence and ask a clarifying question.
+If the tool result includes seasonHistory.seasons (array of past season rows), use it for career trajectory, year-over-year, or multi-season questions; if identityMissing is true or seasons is empty, say history is unavailable from the database rather than guessing.
 
 User message:
 ${message}
@@ -1686,7 +1720,9 @@ export const runReportAgent = async ({
   if (playerInput?.unique_id || playerId) {
     const id = playerInput?.unique_id || playerId;
     logToolInvocation("get_player_by_id", { id });
-    evidence = { player: await getPlayer(id) };
+    const player = await getPlayer(id);
+    const seasonHistory = await attachSeasonHistoryForChat(id);
+    evidence = { player, seasonHistory };
     toolUsed = "get_player_by_id";
   } else if (playerInput?.name_split) {
     logToolInvocation("search_players", {
@@ -1729,10 +1765,12 @@ export const runReportAgent = async ({
       if (bestMatch?.unique_id) {
         logToolInvocation("get_player_by_id", { id: bestMatch.unique_id });
         const player = await getPlayer(bestMatch.unique_id);
+        const seasonHistory = await attachSeasonHistoryForChat(bestMatch.unique_id);
         evidence = {
           extractedTarget: extracted,
           bestMatch,
           player,
+          seasonHistory,
           candidateMatches: matches.slice(0, 5),
         };
         toolUsed = "search_players+get_player_by_id";
@@ -1765,6 +1803,7 @@ Generate a coach-friendly, evidence-based report from the data below.
 Use ONLY the evidence JSON for factual claims.
 Do NOT use outside knowledge, assumptions, memory, or any external data.
 If data is incomplete, explicitly state limitations.
+If evidence includes seasonHistory.seasons, you may add a short "Career / prior seasons" section grounded only in those rows; if identityMissing or empty, omit or note that prior seasons are unavailable.
 
 User request:
 ${message || "Generate a scouting report from provided player data."}
