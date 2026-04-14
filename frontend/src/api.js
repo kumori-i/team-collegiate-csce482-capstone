@@ -205,6 +205,36 @@ export const resetAgentSession = async (sessionId) => {
   return res.data;
 };
 
+export const getChatSuggestions = async ({
+  history = [],
+  latestUserMessage = "",
+  latestAssistantReply = "",
+  toolUsed = "",
+  chartSpec = null,
+  evidence = null,
+  mode = "startup",
+} = {}) => {
+  const token = getValidStoredToken();
+  const res = await axios.post(
+    `${API_URL}/agent/suggestions`,
+    {
+      history,
+      latestUserMessage,
+      latestAssistantReply,
+      toolUsed,
+      chartSpec,
+      evidence,
+      mode,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  return res.data;
+};
+
 // Backward-compatible alias for older imports.
 export const chatWithDataset = chatWithAgent;
 
