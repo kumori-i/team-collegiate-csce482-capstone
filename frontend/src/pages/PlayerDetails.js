@@ -216,6 +216,8 @@ export default function PlayerDetails() {
   const [compareArchetypes, setCompareArchetypes] = useState({});
   const [comparePortalStatus, setComparePortalStatus] = useState({});
   const [similarPortalOnly, setSimilarPortalOnly] = useState(true);
+  const [similarBetterOrEqualOnly, setSimilarBetterOrEqualOnly] =
+    useState(true);
   const [isCompareLoading, setIsCompareLoading] = useState(false);
   const [compareError, setCompareError] = useState("");
   const [seasonHistory, setSeasonHistory] = useState([]);
@@ -355,6 +357,7 @@ export default function PlayerDetails() {
       const data = await getSimilarPlayers(player.unique_id, {
         limit: 5,
         portalOnly: similarPortalOnly,
+        betterOrEqual: similarBetterOrEqualOnly,
       });
       const similarPlayers = Array.isArray(data?.players) ? data.players : [];
       setCompareResults(similarPlayers);
@@ -538,6 +541,16 @@ export default function PlayerDetails() {
                       onChange={(e) => setSimilarPortalOnly(e.target.checked)}
                     />
                     <span>Portal Only</span>
+                  </label>
+                  <label className="player-compare-toggle">
+                    <input
+                      type="checkbox"
+                      checked={similarBetterOrEqualOnly}
+                      onChange={(e) =>
+                        setSimilarBetterOrEqualOnly(e.target.checked)
+                      }
+                    />
+                    <span>Better or Equal Only</span>
                   </label>
                 </form>
 

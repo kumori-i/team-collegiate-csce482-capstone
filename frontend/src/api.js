@@ -259,12 +259,12 @@ export const getPlayerHistory = async (id) => {
 
 export const getSimilarPlayers = async (
   id,
-  { limit = 5, portalOnly = true } = {},
+  { limit = 5, portalOnly = true, betterOrEqual = true } = {},
 ) => {
   const res = await axios.get(
     `${API_URL}/players/${encodeURIComponent(id)}/similar`,
     {
-      params: { limit, portalOnly },
+      params: { limit, portalOnly, betterOrEqual },
     },
   );
   return res.data;

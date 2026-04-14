@@ -54,6 +54,22 @@ const scoreSimilarity = (target, candidate, minMaxByMetric) => {
   return total / count;
 };
 
+const meetsBetterOrEqualThreshold = (target, candidate) => {
+  let comparedMetricCount = 0;
+  for (const metric of SIMILARITY_METRICS) {
+    const targetValue = normalizeStat(metric, target?.[metric]);
+    const candidateValue = normalizeStat(metric, candidate?.[metric]);
+    if (!Number.isFinite(targetValue) || !Number.isFinite(candidateValue)) {
+      continue;
+    }
+    comparedMetricCount += 1;
+    if (candidateValue < targetValue) {
+      return false;
+    }
+  }
+  return comparedMetricCount > 0;
+};
+
 const isPortalAvailable = (player = {}) => {
   if (typeof player.portal_available === "boolean")
     return player.portal_available;
@@ -195,6 +211,10 @@ router.get("/:id/similar", async (req, res) => {
       typeof req.query.portalOnly === "string"
         ? req.query.portalOnly.toLowerCase() !== "false"
         : true;
+    const betterOrEqual =
+      typeof req.query.betterOrEqual === "string"
+        ? req.query.betterOrEqual.toLowerCase() !== "false"
+        : true;
 
     const { data: targetPlayer, error: targetError } = await supabase
       .from("ncaa_players_d1_male")
@@ -251,6 +271,10 @@ router.get("/:id/similar", async (req, res) => {
     }
 
     const ranked = pool
+      .filter(
+        (candidate) =>
+          !betterOrEqual || meetsBetterOrEqualThreshold(targetPlayer, candidate),
+      )
       .map((candidate) => ({
         player: candidate,
         similarity: scoreSimilarity(targetPlayer, candidate, minMaxByMetric),
