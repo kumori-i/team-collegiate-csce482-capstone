@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { chatWithAgentStream, resetAgentSession } from "../api";
+import {
+  chatWithAgentStream,
+  getChatSuggestions,
+  resetAgentSession,
+} from "../api";
 import ChatMetricChart from "../components/ChatMetricChart";
 import "./Chat.css";
 
@@ -74,11 +78,31 @@ const toAgentHistory = (messages) =>
     }))
     .filter((item) => item.content.trim().length > 0);
 
+const buildSuggestionRequest = (messages) => {
+  const history = toAgentHistory(messages);
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.sender === "You")?.text;
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.sender === "Assistant");
+
+  return {
+    history,
+    latestUserMessage: String(latestUserMessage || ""),
+    latestAssistantReply: String(latestAssistantMessage?.text || ""),
+    toolUsed: String(latestAssistantMessage?.toolUsed || ""),
+    chartSpec: latestAssistantMessage?.chartSpec || null,
+    mode: messages.length > 0 ? "followup" : "startup",
+  };
+};
+
 export default function Chat({ onLogout }) {
   const [sessionId, setSessionId] = useState(() => getSessionId());
   const [messages, setMessages] = useState(() =>
     loadMessagesForSession(sessionId),
   );
+  const [suggestions, setSuggestions] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   /** True until the first token chunk or done/error for the in-flight assistant reply. */
@@ -86,9 +110,42 @@ export default function Chat({ onLogout }) {
   const [error, setError] = useState("");
   const endRef = useRef(null);
   const inputRef = useRef(null);
+  const latestMessagesRef = useRef(messages);
 
   useEffect(() => {
-    setMessages(loadMessagesForSession(sessionId));
+    latestMessagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    const sessionMessages = loadMessagesForSession(sessionId);
+    setMessages(sessionMessages);
+
+    let cancelled = false;
+    const loadSuggestions = async () => {
+      try {
+        const data = await getChatSuggestions(buildSuggestionRequest(sessionMessages));
+        if (!cancelled) {
+          setSuggestions((current) =>
+            latestMessagesRef.current.length !== sessionMessages.length
+              ? current
+              : current.length > 0 && sessionMessages.length > 0
+              ? current
+              : Array.isArray(data?.suggestions)
+                ? data.suggestions
+                : [],
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setSuggestions([]);
+        }
+      }
+    };
+
+    loadSuggestions();
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -122,6 +179,7 @@ export default function Chat({ onLogout }) {
     localStorage.setItem("agentSessionId", nextSessionId);
     setSessionId(nextSessionId);
     setMessages([]);
+    setSuggestions([]);
     setNewMessage("");
     setError("");
     inputRef.current?.focus();
@@ -182,9 +240,13 @@ export default function Chat({ onLogout }) {
                     text: data.reply ?? m.text ?? "",
                     sources: data.sources ?? [],
                     chartSpec: data.chartSpec ?? null,
+                    toolUsed: data.toolUsed ?? "",
                   }
                 : m,
             ),
+          );
+          setSuggestions(
+            Array.isArray(data.suggestions) ? data.suggestions : [],
           );
         },
         onError: ({ message: errMsg }) => {
@@ -214,6 +276,12 @@ export default function Chat({ onLogout }) {
     }
   };
 
+  const handleSuggestionClick = (suggestion) => {
+    if (isLoading) return;
+    setNewMessage(String(suggestion || ""));
+    inputRef.current?.focus();
+  };
+
   return (
     <div className="chat-page">
       <div className="chat-container">
@@ -240,6 +308,21 @@ export default function Chat({ onLogout }) {
           {messages.length === 0 ? (
             <div className="no-messages">
               <p>No messages yet. Ask a question to get started.</p>
+              {suggestions.length > 0 ? (
+                <div className="chat-suggestions">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      className="chat-suggestion-button"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      disabled={isLoading}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             messages.map((message) => (
@@ -294,6 +377,22 @@ export default function Chat({ onLogout }) {
           )}
           <div ref={endRef} />
         </div>
+
+        {messages.length > 0 && suggestions.length > 0 ? (
+          <div className="chat-suggestions chat-suggestions-inline">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                className="chat-suggestion-button"
+                onClick={() => handleSuggestionClick(suggestion)}
+                disabled={isLoading}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSendMessage} className="chat-input-form">
           <input

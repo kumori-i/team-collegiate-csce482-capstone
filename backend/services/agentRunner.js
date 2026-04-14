@@ -23,8 +23,15 @@ import { generateWithProvider, generateWithProviderStream } from "./llm.js";
 const SESSION_MEMORY_TTL_MS = 1000 * 60 * 30;
 const MAX_HISTORY_ITEMS = 20;
 const MAX_HISTORY_ITEM_CHARS = 500;
+const MAX_SUGGESTIONS = 3;
 const sessionPlayerMemory = new Map();
 const sessionCohortMemory = new Map();
+
+const STARTER_SUGGESTION_FALLBACKS = [
+  "Who are the top 10 scorers in the database right now?",
+  "Show me the most effective point guards with at least 5 games played.",
+  "Find 5 similar players to Cameron Boozer.",
+];
 
 const logToolInvocation = (tool, args = {}) => {
   try {
@@ -81,6 +88,27 @@ const parseJsonFromModel = (text) => {
       return null;
     }
   }
+};
+
+const sanitizeSuggestion = (value = "") =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+
+const normalizeSuggestions = (items = [], blocked = []) => {
+  const blockedSet = new Set(
+    blocked
+      .map((item) => normalizeName(item))
+      .filter(Boolean),
+  );
+
+  return items
+    .map((item) => sanitizeSuggestion(item))
+    .filter(Boolean)
+    .filter((item) => !blockedSet.has(normalizeName(item)))
+    .filter((item, index, array) => array.indexOf(item) === index)
+    .slice(0, MAX_SUGGESTIONS);
 };
 
 const normalizeName = (value) =>
@@ -776,6 +804,117 @@ const formatConversationHistory = (history = []) => {
     .join("\n");
 };
 
+const buildFallbackSuggestions = ({
+  mode = "followup",
+  lastPlayerName = "",
+  cohortPlayers = [],
+  toolUsed = "",
+  chartSpec = null,
+} = {}) => {
+  if (mode === "startup") {
+    return STARTER_SUGGESTION_FALLBACKS;
+  }
+
+  const playerName =
+    lastPlayerName || chartSpec?.player?.name_split || "this player";
+  const hasCohort = Array.isArray(cohortPlayers) && cohortPlayers.length > 1;
+  const cohortLeader =
+    cohortPlayers.find((player) => player?.name_split)?.name_split || "";
+  const namedPlayer = cohortLeader || playerName;
+
+  if (String(toolUsed).includes("chart")) {
+    return [
+      `What do these metrics suggest about ${playerName}'s role and strengths?`,
+      `Find 5 similar players to ${playerName}.`,
+      `Give me a scouting report on ${playerName}.`,
+    ];
+  }
+
+  if (String(toolUsed).includes("season_history")) {
+    return [
+      `What was ${playerName}'s TS in 2024-25?`,
+      `Show me a chart for ${playerName} using PSP, 3PE, FGS, DSI, and USG.`,
+      `Give me a scouting report on ${playerName}.`,
+    ];
+  }
+
+  if (String(toolUsed).includes("season_metric")) {
+    return [
+      `What about ${playerName}'s TS in 2024-25?`,
+      `Summarize ${playerName}'s season history.`,
+      `Show me a chart for ${playerName} using PPG, RPG, and APG.`,
+    ];
+  }
+
+  if (String(toolUsed).includes("similar_players")) {
+    return [
+      `What archetypes does ${playerName} match?`,
+      `Show me a chart for ${playerName} using PSP, 3PE, FGS, DSI, and USG.`,
+      `Give me a scouting report on ${playerName}.`,
+    ];
+  }
+
+  if (String(toolUsed).includes("report")) {
+    return [
+      `Show me a chart for ${playerName} using PSP, 3PE, FGS, DSI, and USG.`,
+      `Find 5 similar players to ${playerName}.`,
+      `Summarize ${playerName}'s season history.`,
+    ];
+  }
+
+  if (hasCohort) {
+    return [
+      `Show me a chart for ${namedPlayer} using PPG, RPG, and APG.`,
+      `Give me a scouting report on ${namedPlayer}.`,
+      `Which of those players has the best assist-to-turnover ratio?`,
+    ];
+  }
+
+  return [
+    `Show me a chart for ${playerName} using PPG, RPG, and APG.`,
+    `Find 5 similar players to ${playerName}.`,
+    `Give me a scouting report on ${playerName}.`,
+  ];
+};
+
+export const generateChatSuggestions = async ({
+  latestUserMessage = "",
+  latestAssistantReply = "",
+  toolUsed = "none",
+  chartSpec = null,
+  evidence = null,
+  mode = "followup",
+} = {}) => {
+  const lastPlayerName =
+    chartSpec?.player?.name_split ||
+    evidence?.player?.name_split ||
+    evidence?.bestMatch?.name_split ||
+    evidence?.providedPlayer?.name_split ||
+    "";
+  const cohortPlayers = Array.isArray(evidence?.players)
+    ? evidence.players
+    : Array.isArray(evidence?.candidateMatches)
+      ? evidence.candidateMatches
+      : Array.isArray(evidence?.matches)
+        ? evidence.matches
+        : Array.isArray(evidence?.result?.players)
+          ? evidence.result.players
+          : [];
+  const blocked = [latestUserMessage, latestAssistantReply];
+  const fallback = normalizeSuggestions(
+    buildFallbackSuggestions({
+      mode,
+      lastPlayerName,
+      cohortPlayers,
+      toolUsed,
+      chartSpec,
+    }),
+    blocked,
+  );
+
+  return fallback;
+};
+
 const ARCHETYPE_PROMPT_CONTEXT = getArchetypePromptContext();
 
 const extractPrimaryPlayerFromToolResult = (toolResult = {}) => {
@@ -1275,27 +1414,52 @@ export const runChatAgent = async (
   message,
   { sessionId = "", history = [], userId = "", stream } = {},
 ) => {
-  const finish = (result) => {
-    if (!stream) return result;
-    stream.lastToolUsed = result.toolUsed;
+  const finalizeResult = async (result) => {
+    const suggestions = await generateChatSuggestions({
+      history: [
+        ...normalizeConversationHistory(normalizeConversationHistoryLingo(history)),
+        { role: "user", content: String(message || "").trim() },
+        { role: "assistant", content: String(result?.reply || "").trim() },
+      ],
+      latestUserMessage: message,
+      latestAssistantReply: result?.reply || "",
+      toolUsed: result?.toolUsed || "none",
+      chartSpec: result?.chartSpec ?? null,
+      evidence: result?.evidence ?? null,
+      userId,
+      mode: "followup",
+    });
+    return {
+      ...result,
+      suggestions,
+    };
+  };
+
+  const finish = async (result) => {
+    const finalized = await finalizeResult(result);
+    if (!stream) return finalized;
+    stream.lastToolUsed = finalized.toolUsed;
     stream.write("status", { phase: "complete" });
-    stream.write("token", { text: result.reply });
+    stream.write("token", { text: finalized.reply });
     stream.write("done", {
-      reply: result.reply,
-      toolUsed: result.toolUsed,
-      chartSpec: result.chartSpec ?? null,
-      evidence: result.evidence ?? null,
+      reply: finalized.reply,
+      toolUsed: finalized.toolUsed,
+      chartSpec: finalized.chartSpec ?? null,
+      evidence: finalized.evidence ?? null,
+      suggestions: finalized.suggestions ?? [],
     });
   };
 
-  const finishLlm = (result) => {
-    if (!stream) return result;
-    stream.lastToolUsed = result.toolUsed;
+  const finishLlm = async (result) => {
+    const finalized = await finalizeResult(result);
+    if (!stream) return finalized;
+    stream.lastToolUsed = finalized.toolUsed;
     stream.write("done", {
-      reply: result.reply,
-      toolUsed: result.toolUsed,
-      chartSpec: result.chartSpec ?? null,
-      evidence: result.evidence ?? null,
+      reply: finalized.reply,
+      toolUsed: finalized.toolUsed,
+      chartSpec: finalized.chartSpec ?? null,
+      evidence: finalized.evidence ?? null,
+      suggestions: finalized.suggestions ?? [],
     });
   };
 
@@ -1520,13 +1684,13 @@ export const runChatAgent = async (
         : "");
 
     if (!searchTarget) {
-      return {
+      return finish({
         reply:
           "I can look up a season-specific stat, but I need a specific player name first.",
         toolUsed: "none",
         evidence: null,
         chartSpec: null,
-      };
+      });
     }
 
     const toolResult = await resolvePlayerSearchForChat({
@@ -1563,25 +1727,25 @@ export const runChatAgent = async (
         : null;
 
       if (!matchingSeason) {
-        return {
+        return finish({
           reply: `I found ${player.name_split}, but I do not have season history for the ${seasonMetricQuestion.season} season in the database.`,
           toolUsed: "search_players+get_player_by_id+season_metric",
           evidence: toolResult.result,
           chartSpec: null,
-        };
+        });
       }
 
       const rawValue = matchingSeason?.[seasonMetricQuestion.metric];
       if (rawValue === null || rawValue === undefined || rawValue === "") {
-        return {
+        return finish({
           reply: `I found ${player.name_split} for ${seasonMetricQuestion.season}, but ${metricLabel(seasonMetricQuestion.metric)} is unavailable for that season in the database.`,
           toolUsed: "search_players+get_player_by_id+season_metric",
           evidence: toolResult.result,
           chartSpec: null,
-        };
+        });
       }
 
-      return {
+      return finish({
         reply: `${player.name_split}'s ${metricLabel(seasonMetricQuestion.metric)} in the ${seasonMetricQuestion.season} season was ${formatMetricValue(seasonMetricQuestion.metric, rawValue)}.`,
         toolUsed: "search_players+get_player_by_id+season_metric",
         evidence: {
@@ -1596,7 +1760,7 @@ export const runChatAgent = async (
           value: rawValue,
         },
         chartSpec: null,
-      };
+      });
     }
 
     if (
@@ -1613,7 +1777,7 @@ export const runChatAgent = async (
         )
         .join("\n");
 
-      return {
+      return finish({
         reply:
           toolResult.result.ambiguity === "duplicate_exact_name"
             ? `I found multiple players with the exact name "${toolResult.result.query}". Please clarify which one you mean:\n${candidateSummary}\n\nYou can reply with the player id, team, or position.`
@@ -1621,7 +1785,7 @@ export const runChatAgent = async (
         toolUsed: toolResult.tool,
         evidence: toolResult.result,
         chartSpec: null,
-      };
+      });
     }
   }
 
@@ -1656,13 +1820,13 @@ export const runChatAgent = async (
         : "");
 
     if (!searchTarget) {
-      return {
+      return finish({
         reply:
           "I can summarize a player's season career, but I need a specific player name first.",
         toolUsed: "none",
         evidence: null,
         chartSpec: null,
-      };
+      });
     }
 
     const toolResult = await resolvePlayerSearchForChat({
@@ -1709,12 +1873,12 @@ Instructions:
         route: "/api/agent/chat",
         feature: "season_history_reply",
       });
-      return {
+      return finish({
         reply,
         toolUsed: "search_players+get_player_by_id+season_history",
         evidence: toolResult.result,
         chartSpec: null,
-      };
+      });
     }
 
     if (
@@ -1731,7 +1895,7 @@ Instructions:
         )
         .join("\n");
 
-      return {
+      return finish({
         reply:
           toolResult.result.ambiguity === "duplicate_exact_name"
             ? `I found multiple players with the exact name "${toolResult.result.query}". Please clarify which one you mean:\n${candidateSummary}\n\nYou can reply with the player id, team, or position.`
@@ -1739,16 +1903,16 @@ Instructions:
         toolUsed: toolResult.tool,
         evidence: toolResult.result,
         chartSpec: null,
-      };
+      });
     }
 
-    return {
+    return finish({
       reply:
         "I could not find that player well enough to summarize the season career. Please give the full player name.",
       toolUsed: toolResult.tool,
       evidence: toolResult.result,
       chartSpec: null,
-    };
+    });
   }
 
   const cohortMetricFollowup = detectCohortMetricFollowup(normalizedMessage);
