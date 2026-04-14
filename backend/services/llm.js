@@ -126,9 +126,19 @@ const consumeTamuSseBody = async (res, onChunk) => {
   return { fullText: fullText.trim(), usage };
 };
 
+const resolveMaxTokensBody = (perRequestMax) => {
+  if (Number.isFinite(perRequestMax) && perRequestMax > 0) {
+    return { max_tokens: Math.floor(perRequestMax) };
+  }
+  if (Number.isFinite(LLM_MAX_TOKENS)) {
+    return { max_tokens: LLM_MAX_TOKENS };
+  }
+  return {};
+};
+
 export const generateWithProviderStream = async (
   prompt,
-  { userId = "", route = "", feature = "" } = {},
+  { userId = "", route = "", feature = "", maxTokens } = {},
   onChunk,
 ) => {
   if (process.env.LLM_PROVIDER && process.env.LLM_PROVIDER !== "tamu") {
@@ -147,7 +157,7 @@ export const generateWithProviderStream = async (
       ? { temperature: LLM_TEMPERATURE }
       : {}),
     ...(Number.isFinite(LLM_TOP_P) ? { top_p: LLM_TOP_P } : {}),
-    ...(Number.isFinite(LLM_MAX_TOKENS) ? { max_tokens: LLM_MAX_TOKENS } : {}),
+    ...resolveMaxTokensBody(maxTokens),
   };
 
   let lastError = null;
@@ -206,7 +216,7 @@ export const generateWithProviderStream = async (
 
 export const generateWithProviderDetailed = async (
   prompt,
-  { userId = "", route = "", feature = "" } = {},
+  { userId = "", route = "", feature = "", maxTokens } = {},
 ) => {
   if (process.env.LLM_PROVIDER && process.env.LLM_PROVIDER !== "tamu") {
     throw new Error(
@@ -225,7 +235,7 @@ export const generateWithProviderDetailed = async (
       ? { temperature: LLM_TEMPERATURE }
       : {}),
     ...(Number.isFinite(LLM_TOP_P) ? { top_p: LLM_TOP_P } : {}),
-    ...(Number.isFinite(LLM_MAX_TOKENS) ? { max_tokens: LLM_MAX_TOKENS } : {}),
+    ...resolveMaxTokensBody(maxTokens),
   };
 
   let lastError = null;

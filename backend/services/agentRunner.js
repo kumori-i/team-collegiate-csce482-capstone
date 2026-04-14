@@ -1833,6 +1833,23 @@ Return a concise, helpful response grounded only in the tool result.`;
   });
 };
 
+/** Enough headroom for full markdown scouting reports (sections 1–5). */
+const resolveReportMaxTokens = () => {
+  const globalCap = process.env.LLM_MAX_TOKENS
+    ? Number(process.env.LLM_MAX_TOKENS)
+    : NaN;
+  const floorRaw = process.env.LLM_REPORT_MAX_TOKENS;
+  const floor =
+    floorRaw != null && String(floorRaw).trim() !== ""
+      ? Number(floorRaw)
+      : 4096;
+  const safeFloor = Number.isFinite(floor) && floor > 0 ? Math.floor(floor) : 4096;
+  if (Number.isFinite(globalCap) && globalCap > 0) {
+    return Math.max(Math.floor(globalCap), safeFloor);
+  }
+  return safeFloor;
+};
+
 export const runReportAgent = async ({
   message = "",
   playerInput = null,
@@ -1930,7 +1947,10 @@ Generate a coach-friendly, evidence-based report from the data below.
 Use ONLY the evidence JSON for factual claims.
 Do NOT use outside knowledge, assumptions, memory, or any external data.
 If data is incomplete, explicitly state limitations.
-If evidence includes seasonHistory.seasons, you may add a short "Career / prior seasons" section grounded only in those rows; if identityMissing or empty, omit or note that prior seasons are unavailable.
+
+Career and schools (required):
+- If evidence.seasonHistory.seasons is a non-empty array: you MUST cover prior seasons in section (1) Player/Cohort Overview (same section is fine—no separate heading required unless you prefer a short **Career / prior seasons** subheading). For each row, use at least season, team (school), and league/class when present; add a brief stat line (e.g. pts/reb/ast per game) when those fields exist on the row. If two or more rows have different team values, explicitly state that the player competed at multiple schools and name each school with the season(s) tied to evidence only.
+- If evidence has no seasonHistory, seasonHistory.seasons is missing or empty, or seasonHistory.identityMissing or seasonHistory.fetchError is true: add one clear sentence in section (1) that prior multi-season or prior-school history is not available in the provided evidence (do not imply transfers or prior schools without a row to cite).
 
 User request:
 ${message || "Generate a scouting report from provided player data."}
@@ -1942,7 +1962,7 @@ Evidence JSON:
 ${JSON.stringify(evidence)}
 
 Required output format:
-1) Player/Cohort Overview
+1) Player/Cohort Overview — must satisfy the career/school rules above when season rows exist or are missing.
 2) Key Strengths
 3) Key Concerns
 4) Metrics Snapshot
@@ -1950,12 +1970,19 @@ Required output format:
 
 Use markdown and include specific numbers from evidence where available.`;
 
+  const reportMaxTokens = resolveReportMaxTokens();
+
   if (stream) {
     stream.write("status", { phase: "generating" });
     let report = "";
     await generateWithProviderStream(
       reportPrompt,
-      { userId, route: "/api/agent/report", feature: "report_generation" },
+      {
+        userId,
+        route: "/api/agent/report",
+        feature: "report_generation",
+        maxTokens: reportMaxTokens,
+      },
       (chunk) => {
         report += chunk;
         stream.write("token", { text: chunk });
@@ -1972,6 +1999,7 @@ Use markdown and include specific numbers from evidence where available.`;
     userId,
     route: "/api/agent/report",
     feature: "report_generation",
+    maxTokens: reportMaxTokens,
   });
   return {
     report,
