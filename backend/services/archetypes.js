@@ -1,3 +1,5 @@
+import { normalizeUserLingo } from "./lingo.js";
+
 export const ARCHETYPES = [
   {
     name: "The Connector",
@@ -150,7 +152,7 @@ export const resolvePlayerArchetypes = (player) => {
 };
 
 export const isArchetypeQuestion = (message = "") => {
-  const text = String(message || "").toLowerCase();
+  const text = normalizeUserLingo(message).toLowerCase();
   if (!text) return false;
   if (/\barchetype\b|\barchetypes\b/.test(text)) return true;
   return ARCHETYPES.some((archetype) =>

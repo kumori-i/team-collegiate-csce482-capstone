@@ -205,6 +205,36 @@ export const resetAgentSession = async (sessionId) => {
   return res.data;
 };
 
+export const getChatSuggestions = async ({
+  history = [],
+  latestUserMessage = "",
+  latestAssistantReply = "",
+  toolUsed = "",
+  chartSpec = null,
+  evidence = null,
+  mode = "startup",
+} = {}) => {
+  const token = getValidStoredToken();
+  const res = await axios.post(
+    `${API_URL}/agent/suggestions`,
+    {
+      history,
+      latestUserMessage,
+      latestAssistantReply,
+      toolUsed,
+      chartSpec,
+      evidence,
+      mode,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  return res.data;
+};
+
 // Backward-compatible alias for older imports.
 export const chatWithDataset = chatWithAgent;
 
@@ -229,12 +259,12 @@ export const getPlayerHistory = async (id) => {
 
 export const getSimilarPlayers = async (
   id,
-  { limit = 5, portalOnly = true } = {},
+  { limit = 5, portalOnly = true, betterOrEqual = true } = {},
 ) => {
   const res = await axios.get(
     `${API_URL}/players/${encodeURIComponent(id)}/similar`,
     {
-      params: { limit, portalOnly },
+      params: { limit, portalOnly, betterOrEqual },
     },
   );
   return res.data;

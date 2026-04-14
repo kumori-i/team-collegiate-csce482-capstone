@@ -3,6 +3,7 @@ import { authenticateToken } from "../middleware/auth.js";
 import { recordUsageEvent } from "../services/usageTracker.js";
 import {
   clearChatSessionMemory,
+  generateChatSuggestions,
   runChatAgent,
   runReportAgent,
 } from "../services/agentRunner.js";
@@ -56,11 +57,14 @@ router.post("/chat", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Message is required." });
     }
 
-    const { reply, toolUsed, chartSpec } = await runChatAgent(message, {
+    const { reply, toolUsed, chartSpec, suggestions } = await runChatAgent(
+      message,
+      {
       sessionId,
       history,
       userId,
-    });
+      },
+    );
     await recordUsageEvent({
       userId,
       provider: "internal",
@@ -76,6 +80,7 @@ router.post("/chat", authenticateToken, async (req, res) => {
       agent: "chat",
       toolUsed,
       chartSpec,
+      suggestions: suggestions || [],
     });
   } catch (err) {
     console.error("Agent chat error:", err);
@@ -145,6 +150,48 @@ router.post("/reset", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("Agent reset error:", err);
     return res.status(500).json({ error: "Agent reset request failed." });
+  }
+});
+
+router.post("/suggestions", authenticateToken, async (req, res) => {
+  try {
+    const history = Array.isArray(req.body.history) ? req.body.history : [];
+    const latestUserMessage =
+      typeof req.body.latestUserMessage === "string"
+        ? req.body.latestUserMessage.trim()
+        : "";
+    const latestAssistantReply =
+      typeof req.body.latestAssistantReply === "string"
+        ? req.body.latestAssistantReply.trim()
+        : "";
+    const toolUsed =
+      typeof req.body.toolUsed === "string" ? req.body.toolUsed.trim() : "";
+    const mode =
+      req.body.mode === "startup" || req.body.mode === "followup"
+        ? req.body.mode
+        : history.length > 0 || latestUserMessage || latestAssistantReply
+          ? "followup"
+          : "startup";
+    const suggestions = await generateChatSuggestions({
+      history,
+      latestUserMessage,
+      latestAssistantReply,
+      toolUsed,
+      chartSpec:
+        req.body.chartSpec && typeof req.body.chartSpec === "object"
+          ? req.body.chartSpec
+          : null,
+      evidence:
+        req.body.evidence && typeof req.body.evidence === "object"
+          ? req.body.evidence
+          : null,
+      userId: req.user.id,
+      mode,
+    });
+    return res.json({ suggestions });
+  } catch (err) {
+    console.error("Agent suggestions error:", err);
+    return res.status(500).json({ error: "Agent suggestion request failed." });
   }
 });
 

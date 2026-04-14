@@ -11,6 +11,17 @@ This guide defines a repeatable manual user-testing pass for the main frontend w
 - Valid test user account
 - Seeded player data available in the backend database
 
+## Automated Test Script
+
+Run the frontend automated test suite before or after the manual user-testing pass:
+
+```bash
+cd frontend
+CI=true npm test -- --watch=false
+```
+
+This runs the React Testing Library and Jest tests once in non-interactive mode.
+
 ## Pre-Test Checklist
 
 - Confirm the frontend loads without console-breaking errors.

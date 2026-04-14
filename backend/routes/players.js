@@ -18,7 +18,6 @@ const router = express.Router();
 
 const clampLimit = (value, fallback = 5) =>
   Math.min(20, Math.max(1, Number.parseInt(value, 10) || fallback));
-
 // Search players - similar to my-app home page functionality
 // GET /api/players/search?query=john&limit=50
 /**
