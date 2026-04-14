@@ -1,5 +1,22 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": "753ba7b1-0217-4818-9480-8bbb2f174b67",
+      "email": "koharrisonko@gmail.com",
+      "name": "Harrison Ko",
+      "password_hash": null,
+      "google_id": "113016406852674662921",
+      "created_at": "2026-04-14T14:24:29.507Z"
+    },
+    {
+      "id": "e207e41e-7b67-4cb7-a727-05d239b88aa5",
+      "email": "harryko@tamu.edu",
+      "name": "Harry Ko",
+      "password_hash": null,
+      "google_id": "102529174183840744579",
+      "created_at": "2026-04-14T14:25:30.018Z"
+    }
+  ],
   "model_usage_events": [
     {
       "user_id": "26631770-78cb-4f49-9a3a-54e3d0c3dc4a",
