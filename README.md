@@ -8,7 +8,7 @@ This repository contains a React frontend and Express backend for basketball pla
 
 - Frontend: React in [frontend/](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend)
 - Backend: Express in [backend/](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend)
-- Data: Supabase
+- Data: Company GraphQL API (Cerebro)
 - Auth: JWT with Google login support
 - AI providers: Gemini, TAMU-protected models, or Ollama
 
@@ -18,7 +18,7 @@ For a new user receiving this repo, the recommended documented setup is Gemini.
 
 Use:
 
-- Supabase for data
+- Company GraphQL API for player/event data
 - Gemini for AI generation
 
 TAMU and Ollama remain supported, but Gemini is the easiest handoff path because it only requires a Gemini API key instead of access to a protected TAMU deployment.
@@ -51,8 +51,13 @@ npm install
 PORT=5001
 JWT_SECRET=replace_with_a_random_secret
 
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_publishable_key
+COMPANY_AUTH_URL=https://hasura-auth-api-960327267159.us-east4.run.app
+COMPANY_GRAPHQL_URL=https://hasura-graphql-engine-960327267159.us-east4.run.app/v1/graphql
+COMPANY_API_EMAIL=your_company_api_email
+COMPANY_API_PASSWORD=your_company_api_password
+# Optional direct token path instead of email/password login:
+# COMPANY_API_JWT=...
+# COMPANY_API_REFRESH_TOKEN=...
 
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_api_key

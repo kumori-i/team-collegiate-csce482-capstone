@@ -1,12 +1,8 @@
-import { supabase } from "../supabase.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runCompanyGraphql } from "./companyApi.js";
 
-const PLAYER_COLUMNS = `unique_id, name_split, team, position, league, class,
-  pts_g, reb_g, ast_g, fg, c_3pt, ft, stl_g, blk_g, to_g,
-  min_g, g, c_2pt, efg, ts, usg, ppp, orb_g, drb_g, pf_g, a_to,
-  ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40`;
 const SIMILARITY_METRICS = ["psp", "c_3pe", "fgs", "ram", "dsi", "usg"];
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +41,132 @@ const ELITE_STAT_METRICS = [
 ];
 
 const METRIC_SELECT_LIST = ELITE_STAT_METRICS.join(", ");
+
+const EVENT_ALLOWLIST = (process.env.COMPANY_ALLOWED_EVENTS || "")
+  .split("\n")
+  .map((line) => line.trim())
+  .filter(Boolean);
+
+const METRIC_TO_COMPANY_FIELD = {
+  pts_g: "pts_per_game",
+  reb_g: "reb_per_game",
+  ast_g: "ast_per_game",
+  stl_g: "stl_per_game",
+  blk_g: "blk_per_game",
+  fg: "fg_pct",
+  c_3pt: "three_pt_pct",
+  ft: "ft_pct",
+  efg: "efg_pct",
+  ts: "ts_pct",
+  usg: "usg_pct",
+  ppp: "ppp",
+  a_to: "ast_tov_ratio",
+  orb_40: "orb_per_40",
+  ram: "ram",
+  c_ram: "c_ram",
+  psp: "psp",
+  c_3pe: "three_pe",
+  dsi: "dsi",
+  fgs: "fgs",
+  bms: "ppp",
+};
+
+const COMPANY_PLAYER_FIELDS = `
+  id
+  name
+  position
+  player_event(limit: 8, order_by: { games_played: desc }) {
+    games_played
+    pts_per_game
+    reb_per_game
+    ast_per_game
+    stl_per_game
+    blk_per_game
+    fg_pct
+    three_pt_pct
+    ft_pct
+    efg_pct
+    ts_pct
+    usg_pct
+    ppp
+    ast_tov_ratio
+    orb_per_40
+    ram
+    c_ram
+    psp
+    three_pe
+    dsi
+    fgs
+    event { name league { name } }
+    team { name }
+  }
+`;
+
+const eventIsAllowed = (eventName = "") =>
+  EVENT_ALLOWLIST.length === 0 || EVENT_ALLOWLIST.includes(String(eventName));
+
+const pickPrimaryEventRow = (rows = []) =>
+  rows.find((row) => eventIsAllowed(row?.event?.name)) || rows[0] || null;
+
+const mapCompanyRowToPlayer = (playerRow = {}) => {
+  const eventRows = Array.isArray(playerRow?.player_event)
+    ? playerRow.player_event
+    : [];
+  const primary = pickPrimaryEventRow(eventRows) || {};
+
+  return {
+    unique_id: playerRow?.id || "",
+    name_split: playerRow?.name || "",
+    team: primary?.team?.name || "",
+    position: playerRow?.position || "",
+    league: primary?.event?.league?.name || "",
+    class: "",
+    pts_g: primary?.pts_per_game ?? null,
+    reb_g: primary?.reb_per_game ?? null,
+    ast_g: primary?.ast_per_game ?? null,
+    fg: primary?.fg_pct ?? null,
+    c_3pt: primary?.three_pt_pct ?? null,
+    ft: primary?.ft_pct ?? null,
+    stl_g: primary?.stl_per_game ?? null,
+    blk_g: primary?.blk_per_game ?? null,
+    to_g: null,
+    min_g: null,
+    g: primary?.games_played ?? null,
+    c_2pt: null,
+    efg: primary?.efg_pct ?? null,
+    ts: primary?.ts_pct ?? null,
+    usg: primary?.usg_pct ?? null,
+    ppp: primary?.ppp ?? null,
+    orb_g: null,
+    drb_g: null,
+    pf_g: null,
+    a_to: primary?.ast_tov_ratio ?? null,
+    ram: primary?.ram ?? null,
+    c_ram: primary?.c_ram ?? null,
+    psp: primary?.psp ?? null,
+    c_3pe: primary?.three_pe ?? null,
+    dsi: primary?.dsi ?? null,
+    fgs: primary?.fgs ?? null,
+    bms: null,
+    orb_40: primary?.orb_per_40 ?? null,
+  };
+};
+
+const buildWhereFilters = ({ query = "", team = "", position = "" } = {}) => {
+  const parts = [];
+  if (query) parts.push(`{ name: { _ilike: "%${query.replace(/"/g, '\\"')}%" } }`);
+  if (position)
+    parts.push(
+      `{ position: { _ilike: "%${position.replace(/"/g, '\\"')}%" } }`,
+    );
+  if (team) {
+    const safeTeam = team.replace(/"/g, '\\"');
+    parts.push(`{ player_event: { team: { name: { _ilike: "%${safeTeam}%" } } } }`);
+  }
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return `where: ${parts[0]}`;
+  return `where: { _and: [${parts.join(",")}] }`;
+};
 
 const normalizePositionFilter = (value = "") => {
   const raw = String(value || "").trim();
@@ -178,19 +300,76 @@ const writePercentileCache = async (payload) => {
   await writeFile(CACHE_FILE, JSON.stringify(payload, null, 2), "utf-8");
 };
 
+const fetchMetricRows = async ({
+  minGames = 0,
+  limit = 1200,
+  position = "",
+  team = "",
+  orderByMetric = "",
+} = {}) => {
+  const safeMinGames = Math.max(0, Number(minGames) || 0);
+  const metricField = METRIC_TO_COMPANY_FIELD[orderByMetric] || "pts_per_game";
+  const where = [
+    `{ games_played: { _gte: ${safeMinGames} } }`,
+    ...(position
+      ? [
+          `{ player: { position: { _ilike: "%${position.replace(/"/g, '\\"')}%" } } }`,
+        ]
+      : []),
+    ...(team
+      ? [`{ team: { name: { _ilike: "%${team.replace(/"/g, '\\"')}%" } } }`]
+      : []),
+  ];
+  const query = `
+    query FetchMetricRows {
+      player_event(
+        where: { _and: [${where.join(",")}] }
+        order_by: [{ ${metricField}: desc_nulls_last }]
+        limit: ${Math.max(50, Number(limit) || 200)}
+      ) {
+        games_played
+        pts_per_game
+        reb_per_game
+        ast_per_game
+        stl_per_game
+        blk_per_game
+        fg_pct
+        three_pt_pct
+        ft_pct
+        efg_pct
+        ts_pct
+        usg_pct
+        ppp
+        ast_tov_ratio
+        orb_per_40
+        ram
+        c_ram
+        psp
+        three_pe
+        dsi
+        fgs
+        event { name league { name } }
+        team { name }
+        player { id name position }
+      }
+    }
+  `;
+  const data = await runCompanyGraphql(query);
+  return (data?.player_event || [])
+    .filter((row) => eventIsAllowed(row?.event?.name))
+    .map((row) =>
+      mapCompanyRowToPlayer({
+        id: row?.player?.id,
+        name: row?.player?.name,
+        position: row?.player?.position,
+        player_event: [row],
+      }),
+    );
+};
+
 const buildTopPercentileCache = async ({ minGames = 5 } = {}) => {
   const safeMinGames = Math.max(0, Number(minGames) || 0);
-  const selectClause = `g, ${METRIC_SELECT_LIST}`;
-  const { data, error } = await supabase
-    .from("ncaa_players_d1_male")
-    .select(selectClause)
-    .gte("g", safeMinGames);
-
-  if (error) {
-    throw new Error(`Percentile cache build failed: ${error.message}`);
-  }
-
-  const rows = data || [];
+  const rows = await fetchMetricRows({ minGames: safeMinGames, limit: 3500 });
   const thresholds = {};
   for (const metric of ELITE_STAT_METRICS) {
     const threshold = percentile(
@@ -241,53 +420,37 @@ export const searchPlayers = async ({
 }) => {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const safePosition = normalizePositionFilter(position);
-  const whereParts = [`name_split IS NOT NULL`, `name_split <> ''`];
-  if (query) whereParts.push(`name_split ILIKE '%${query}%'`);
-  if (team) whereParts.push(`team ILIKE '%${team}%'`);
-  if (safePosition) whereParts.push(`position ILIKE '%${safePosition}%'`);
-  console.log(
-    `[agentTools.searchPlayers] sql=SELECT unique_id, name_split, team, position, league, class FROM ncaa_players_d1_male WHERE ${whereParts.join(" AND ")} LIMIT ${safeLimit};`,
-  );
-
-  let supabaseQuery = supabase
-    .from("ncaa_players_d1_male")
-    .select("unique_id, name_split, team, position, league, class")
-    .not("name_split", "is", null)
-    .neq("name_split", "");
-
-  if (query) {
-    supabaseQuery = supabaseQuery.ilike("name_split", `%${query}%`);
-  }
-  if (team) {
-    supabaseQuery = supabaseQuery.ilike("team", `%${team}%`);
-  }
-  if (safePosition) {
-    supabaseQuery = supabaseQuery.ilike("position", `%${safePosition}%`);
-  }
-
-  supabaseQuery = supabaseQuery.limit(safeLimit);
-
-  const { data, error } = await supabaseQuery;
-  if (error) {
-    throw new Error(`Player search failed: ${error.message}`);
-  }
-  return data || [];
+  const filterClause = buildWhereFilters({
+    query,
+    team,
+    position: safePosition,
+  });
+  const gql = `
+    query SearchPlayers {
+      player(${filterClause}${filterClause ? "," : ""} limit: ${safeLimit}) {
+        ${COMPANY_PLAYER_FIELDS}
+      }
+    }
+  `;
+  const data = await runCompanyGraphql(gql);
+  return (data?.player || []).map(mapCompanyRowToPlayer);
 };
 
 export const getPlayer = async (id) => {
-  console.log(
-    `[agentTools.getPlayer] sql=SELECT ${PLAYER_COLUMNS.replace(/\s+/g, " ").trim()} FROM ncaa_players_d1_male WHERE unique_id = '${String(id)}' LIMIT 1;`,
-  );
-  const { data, error } = await supabase
-    .from("ncaa_players_d1_male")
-    .select(PLAYER_COLUMNS)
-    .eq("unique_id", id)
-    .single();
-
-  if (error) {
-    throw new Error(`Player lookup failed: ${error.message}`);
+  const safeId = String(id).replace(/"/g, '\\"');
+  const gql = `
+    query GetPlayer {
+      player(where: { id: { _eq: "${safeId}" } }, limit: 1) {
+        ${COMPANY_PLAYER_FIELDS}
+      }
+    }
+  `;
+  const data = await runCompanyGraphql(gql);
+  const row = data?.player?.[0];
+  if (!row) {
+    throw new Error("Player lookup failed: player not found");
   }
-  return data;
+  return mapCompanyRowToPlayer(row);
 };
 
 export const getSimilarPlayersById = async ({
@@ -297,25 +460,15 @@ export const getSimilarPlayersById = async ({
 }) => {
   const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
   const targetPlayer = await getPlayer(id);
+  const candidatePool = await fetchMetricRows({
+    minGames: 1,
+    limit: 1200,
+    position: targetPlayer.position || "",
+  });
 
-  let poolQuery = supabase
-    .from("ncaa_players_d1_male")
-    .select("*")
-    .neq("unique_id", id)
-    .not("name_split", "is", null)
-    .neq("name_split", "")
-    .limit(500);
-
-  if (targetPlayer.position) {
-    poolQuery = poolQuery.ilike("position", `%${targetPlayer.position}%`);
-  }
-
-  const { data: candidatePool, error } = await poolQuery;
-  if (error) {
-    throw new Error(`Similar player lookup failed: ${error.message}`);
-  }
-
-  const pool = (Array.isArray(candidatePool) ? candidatePool : []).filter(
+  const pool = (Array.isArray(candidatePool) ? candidatePool : [])
+    .filter((candidate) => candidate?.unique_id !== id)
+    .filter(
     (candidate) => {
       if (portalState === "portal_only") return isPortalAvailable(candidate);
       if (portalState === "non_portal_only")
@@ -386,43 +539,21 @@ export const getTopPlayersByMetric = async ({
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 100);
   const safeMinGames = Number(minGames) || 0;
   const safePosition = normalizePositionFilter(position);
-  const whereParts = [
-    `name_split IS NOT NULL`,
-    `name_split <> ''`,
-    `g >= ${safeMinGames}`,
-  ];
-  if (safePosition) whereParts.push(`position ILIKE '%${safePosition}%'`);
-  if (team) whereParts.push(`team ILIKE '%${team}%'`);
-  console.log(
-    `[agentTools.getTopPlayersByMetric] sql=SELECT unique_id, name_split, team, position, class, league, g, pts_g, reb_g, ast_g, usg, a_to, efg, ts, ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40 FROM ncaa_players_d1_male WHERE ${whereParts.join(" AND ")} ORDER BY ${safeMetric} DESC LIMIT ${safeLimit};`,
-  );
-
-  let supabaseQuery = supabase
-    .from("ncaa_players_d1_male")
-    .select(
-      "unique_id, name_split, team, position, class, league, g, pts_g, reb_g, ast_g, usg, a_to, efg, ts, ram, c_ram, psp, c_3pe, dsi, fgs, bms, orb_40",
-    )
-    .not("name_split", "is", null)
-    .neq("name_split", "")
-    .gte("g", safeMinGames)
-    .order(safeMetric, { ascending: false, nullsFirst: false })
-    .limit(safeLimit);
-
-  if (safePosition) {
-    supabaseQuery = supabaseQuery.ilike("position", `%${safePosition}%`);
-  }
-  if (team) {
-    supabaseQuery = supabaseQuery.ilike("team", `%${team}%`);
-  }
-
-  const { data, error } = await supabaseQuery;
-  if (error) {
-    throw new Error(`Top players query failed: ${error.message}`);
-  }
+  const data = await fetchMetricRows({
+    minGames: safeMinGames,
+    limit: Math.max(50, safeLimit * 4),
+    position: safePosition,
+    team,
+    orderByMetric: safeMetric,
+  });
+  const sorted = data
+    .filter((row) => Number.isFinite(Number(row?.[safeMetric])))
+    .sort((a, b) => Number(b[safeMetric]) - Number(a[safeMetric]))
+    .slice(0, safeLimit);
 
   return {
     metric: safeMetric,
-    players: data || [],
+    players: sorted || [],
   };
 };
 
@@ -458,31 +589,12 @@ export const getTopPlayersByPosition = async ({
     `[agentTools.getTopPlayersByPosition] sql=SELECT unique_id, name_split, team, position, class, league, g, ${METRIC_SELECT_LIST} FROM ncaa_players_d1_male WHERE ${whereParts.join(" AND ")} ORDER BY ${focusMetric || "elite_count DESC"} LIMIT ${safeLimit};`,
   );
 
-  let supabaseQuery = supabase
-    .from("ncaa_players_d1_male")
-    .select(
-      `unique_id, name_split, team, position, class, league, g, ${METRIC_SELECT_LIST}`,
-    )
-    .not("name_split", "is", null)
-    .neq("name_split", "")
-    .gte("g", safeMinGames);
-
-  if (safePosition) {
-    supabaseQuery = supabaseQuery.ilike("position", `%${safePosition}%`);
-  }
-  if (team) {
-    supabaseQuery = supabaseQuery.ilike("team", `%${team}%`);
-  }
-  if (thresholdFilters.length > 0) {
-    supabaseQuery = supabaseQuery.or(thresholdFilters.join(","));
-  }
-
-  const { data, error } = await supabaseQuery.limit(
-    Math.max(safeLimit * 5, 25),
-  );
-  if (error) {
-    throw new Error(`Effective players query failed: ${error.message}`);
-  }
+  const data = await fetchMetricRows({
+    minGames: safeMinGames,
+    limit: Math.max(safeLimit * 8, 200),
+    position: safePosition,
+    team,
+  });
 
   const ranked = (data || [])
     .map((player) => {

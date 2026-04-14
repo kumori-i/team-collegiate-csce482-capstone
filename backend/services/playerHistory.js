@@ -1,10 +1,10 @@
-import { supabase } from "../supabase.js";
+import { runCompanyGraphql } from "./companyApi.js";
 
 export const PLAYER_HISTORY_VIEW =
-  process.env.PLAYER_HISTORY_VIEW || "v_ncaa_players_d1_male_season_history";
+  process.env.PLAYER_HISTORY_VIEW || "player_event";
 
 export const PLAYER_HISTORY_MATCH_COLUMN =
-  process.env.PLAYER_HISTORY_MATCH_COLUMN || "name_home_dob";
+  process.env.PLAYER_HISTORY_MATCH_COLUMN || "player_id";
 
 function normalizeHistoryIdentityKey(raw) {
   if (raw === null || raw === undefined) return "";
@@ -17,45 +17,62 @@ function normalizeHistoryIdentityKey(raw) {
  * @throws {Error} code PGRST116 when no current player row exists
  */
 export async function fetchPlayerSeasonHistory(uniqueId) {
-  const matchCol = PLAYER_HISTORY_MATCH_COLUMN;
-  const { data: current, error: playerError } = await supabase
-    .from("ncaa_players_d1_male")
-    .select(matchCol)
-    .eq("unique_id", uniqueId)
-    .single();
-
-  if (playerError) {
-    if (playerError.code === "PGRST116") {
-      const err = new Error("Player not found");
-      err.code = "PGRST116";
-      throw err;
+  const safeId = String(uniqueId || "").replace(/"/g, '\\"');
+  const gql = `
+    query FetchPlayerHistory {
+      player(where: { id: { _eq: "${safeId}" } }, limit: 1) {
+        id
+        player_event(order_by: { event: { name: asc } }) {
+          games_played
+          pts_per_game
+          reb_per_game
+          ast_per_game
+          stl_per_game
+          blk_per_game
+          ts_pct
+          efg_pct
+          usg_pct
+          fg_pct
+          three_pt_pct
+          ft_pct
+          event { name league { name } }
+          team { name }
+          player { position }
+        }
+      }
     }
-    throw new Error(playerError.message || "Identity lookup failed");
+  `;
+  const data = await runCompanyGraphql(gql);
+  const player = data?.player?.[0];
+  if (!player) {
+    const err = new Error("Player not found");
+    err.code = "PGRST116";
+    throw err;
   }
-
-  const identityKey = normalizeHistoryIdentityKey(current?.[matchCol]);
-  if (!identityKey) {
-    return {
-      seasons: [],
-      identityMissing: true,
-      matchedBy: matchCol,
-    };
-  }
-
-  const { data: seasons, error } = await supabase
-    .from(PLAYER_HISTORY_VIEW)
-    .select("*")
-    .eq(matchCol, identityKey)
-    .order("season", { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  const identityKey = normalizeHistoryIdentityKey(player?.id);
+  const seasons = (player?.player_event || []).map((row) => ({
+    season: row?.event?.name || "",
+    team: row?.team?.name || "",
+    league: row?.event?.league?.name || "",
+    position: row?.player?.position || "",
+    g: row?.games_played ?? null,
+    pts_g: row?.pts_per_game ?? null,
+    reb_g: row?.reb_per_game ?? null,
+    ast_g: row?.ast_per_game ?? null,
+    stl_g: row?.stl_per_game ?? null,
+    blk_g: row?.blk_per_game ?? null,
+    ts: row?.ts_pct ?? null,
+    efg: row?.efg_pct ?? null,
+    usg: row?.usg_pct ?? null,
+    fg: row?.fg_pct ?? null,
+    c_3pt: row?.three_pt_pct ?? null,
+    ft: row?.ft_pct ?? null,
+  }));
 
   return {
-    seasons: seasons || [],
+    seasons,
     identityMissing: false,
-    matchedBy: matchCol,
+    matchedBy: PLAYER_HISTORY_MATCH_COLUMN,
   };
 }
 

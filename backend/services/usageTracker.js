@@ -1,4 +1,7 @@
-import { supabase } from "../supabase.js";
+import {
+  insertUsageEvent,
+  listUsageEventsByUserSince,
+} from "./database.js";
 
 const DEFAULT_GEMINI_PRICING = {
   "gemini-2.5-flash": {
@@ -142,10 +145,7 @@ export const recordUsageEvent = async ({
     created_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase.from("model_usage_events").insert(payload);
-  if (error) {
-    console.error("Usage logging failed:", error);
-  }
+  await insertUsageEvent(payload);
 };
 
 const isProcessingEvent = (event = {}) =>
@@ -229,20 +229,10 @@ const summarizeByDay = (events = []) => {
 };
 
 export const getUsageDashboard = async ({ userId = "", days = 14 } = {}) => {
-  const { data, error } = await supabase
-    .from("model_usage_events")
-    .select(
-      "provider, model, route, feature, input_tokens, output_tokens, total_tokens, cost_usd, created_at",
-    )
-    .eq("user_id", userId)
-    .gte("created_at", createRangeStart(days))
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    throw new Error(`Usage dashboard query failed: ${error.message}`);
-  }
-
-  const events = Array.isArray(data) ? data : [];
+  const events = await listUsageEventsByUserSince({
+    userId,
+    isoStart: createRangeStart(days),
+  });
   const processingEvents = getProcessingEvents(events);
   const modelEvents = getModelEvents(events);
   const totals = modelEvents.reduce(
