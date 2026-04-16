@@ -238,9 +238,16 @@ export const getChatSuggestions = async ({
 // Backward-compatible alias for older imports.
 export const chatWithDataset = chatWithAgent;
 
-export const searchPlayers = async (query) => {
+export const searchPlayers = async (
+  queryOrFilters,
+  extraFilters = {},
+) => {
+  const params =
+    typeof queryOrFilters === "string"
+      ? { query: queryOrFilters, ...extraFilters }
+      : { ...(queryOrFilters || {}) };
   const res = await axios.get(`${API_URL}/players/search`, {
-    params: { query },
+    params,
   });
   return res.data;
 };
@@ -259,7 +266,7 @@ export const getPlayerHistory = async (id) => {
 
 export const getSimilarPlayers = async (
   id,
-  { limit = 5, portalOnly = true, betterOrEqual = true } = {},
+  { limit = 5, portalOnly = false, betterOrEqual = true } = {},
 ) => {
   const res = await axios.get(
     `${API_URL}/players/${encodeURIComponent(id)}/similar`,

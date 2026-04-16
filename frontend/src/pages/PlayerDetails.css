@@ -71,6 +71,12 @@
     background: var(--surface-2);
 }
 
+.player-portal-badge--unknown {
+    color: var(--muted);
+    background: var(--surface-2);
+    border-style: dashed;
+}
+
 .player-report-section {
     margin-top: 1.75rem;
     display: flex;
@@ -311,6 +317,12 @@
     gap: 0.75rem;
 }
 
+.player-compare-section--standalone {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
 .player-compare-header {
     display: flex;
     flex-wrap: wrap;
@@ -449,6 +461,14 @@
     color: var(--text);
 }
 
+.player-compare-toggle--disabled {
+    opacity: 0.6;
+}
+
+.player-compare-toggle input:disabled {
+    cursor: not-allowed;
+}
+
 .player-compare-clear-filters {
     width: fit-content;
     padding: 0.35rem 0.7rem;
@@ -519,6 +539,12 @@
 .player-compare-portal--unavailable {
     color: var(--muted);
     background: var(--surface);
+}
+
+.player-compare-portal--unknown {
+    color: var(--muted);
+    background: var(--surface);
+    border-style: dashed;
 }
 
 .player-compare-archetypes {

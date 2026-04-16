@@ -48,8 +48,22 @@ router.get("/search", async (req, res) => {
   try {
     const query =
       typeof req.query.query === "string" ? req.query.query.trim() : "";
+    const team =
+      typeof req.query.team === "string" ? req.query.team.trim() : "";
+    const position =
+      typeof req.query.position === "string" ? req.query.position.trim() : "";
+    const portalOnly =
+      typeof req.query.portalOnly === "string"
+        ? req.query.portalOnly.toLowerCase() !== "false"
+        : false;
     const limit = parseInt(req.query.limit, 10) || 50;
-    const data = await searchPlayers({ query, limit });
+    const data = await searchPlayers({
+      query,
+      team,
+      position,
+      portalOnly,
+      limit,
+    });
 
     return res.json({
       players: data || [],
@@ -93,12 +107,17 @@ router.get("/:id/similar", async (req, res) => {
     const portalOnly =
       typeof req.query.portalOnly === "string"
         ? req.query.portalOnly.toLowerCase() !== "false"
+        : false;
+    const betterOrEqual =
+      typeof req.query.betterOrEqual === "string"
+        ? req.query.betterOrEqual.toLowerCase() !== "false"
         : true;
 
     const result = await getSimilarPlayersById({
       id,
       limit,
       portalState: portalOnly ? "portal_only" : "any",
+      betterOrEqual,
     });
     const pool = Array.isArray(result?.players) ? result.players : [];
     if (!pool.length) {

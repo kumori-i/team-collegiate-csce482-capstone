@@ -9,6 +9,7 @@ import {
 } from "../api";
 import ReactMarkdown from "react-markdown";
 import PlayerCharts from "../components/PlayerCharts";
+import PlayerProgressionCharts from "../components/PlayerProgressionCharts";
 import "./PlayerDetails.css";
 
 const ARCHETYPES = [
@@ -124,26 +125,32 @@ const resolvePlayerArchetypes = (player) => {
 };
 
 const resolvePortalAvailability = (player) => {
-  if (!player) {
-    return { label: "Portal status unavailable", isAvailable: false };
+  const explicitValue = resolveExplicitPortalValue(player);
+  if (explicitValue === true) {
+    return { label: "Portal: Available", isAvailable: true };
   }
+  if (explicitValue === false) {
+    return { label: "Portal: Not Available", isAvailable: false };
+  }
+  return { label: "Portal data unavailable from source", isAvailable: null };
+};
+
+const MAX_ARCHETYPE_TAGS = 2;
+const PORTAL_DATA_AVAILABLE = false;
+
+const resolveExplicitPortalValue = (player) => {
+  if (!player) return null;
 
   if (typeof player.portal_available === "boolean") {
-    return player.portal_available
-      ? { label: "Portal: Available", isAvailable: true }
-      : { label: "Portal: Not Available", isAvailable: false };
+    return player.portal_available;
   }
 
   if (typeof player.in_portal === "boolean") {
-    return player.in_portal
-      ? { label: "Portal: Available", isAvailable: true }
-      : { label: "Portal: Not Available", isAvailable: false };
+    return player.in_portal;
   }
 
   if (typeof player.transfer_portal === "boolean") {
-    return player.transfer_portal
-      ? { label: "Portal: Available", isAvailable: true }
-      : { label: "Portal: Not Available", isAvailable: false };
+    return player.transfer_portal;
   }
 
   const portalLikeEntries = Object.entries(player).filter(([key]) =>
@@ -151,14 +158,10 @@ const resolvePortalAvailability = (player) => {
   );
   for (const [, rawValue] of portalLikeEntries) {
     if (typeof rawValue === "boolean") {
-      return rawValue
-        ? { label: "Portal: Available", isAvailable: true }
-        : { label: "Portal: Not Available", isAvailable: false };
+      return rawValue;
     }
     if (typeof rawValue === "number") {
-      return rawValue > 0
-        ? { label: "Portal: Available", isAvailable: true }
-        : { label: "Portal: Not Available", isAvailable: false };
+      return rawValue > 0;
     }
     if (typeof rawValue === "string") {
       const text = rawValue.toLowerCase().trim();
@@ -167,39 +170,20 @@ const resolvePortalAvailability = (player) => {
           text,
         )
       ) {
-        return { label: "Portal: Available", isAvailable: true };
+        return true;
       }
       if (
         /\bno\b|\bfalse\b|\bnot available\b|\bnot in portal\b|\binactive\b/.test(
           text,
         )
       ) {
-        return { label: "Portal: Not Available", isAvailable: false };
+        return false;
       }
     }
   }
 
-  const combinedText = [
-    player.team,
-    player.league,
-    player.class,
-    player.status,
-    player.roster_status,
-  ]
-    .map((value) => String(value || "").toLowerCase())
-    .join(" ");
-
-  const inPortalByText =
-    /\btransfer portal\b/.test(combinedText) ||
-    /\bin portal\b/.test(combinedText) ||
-    /\bportal\b/.test(combinedText);
-
-  return inPortalByText
-    ? { label: "Portal: Available", isAvailable: true }
-    : { label: "Portal: Not Available", isAvailable: false };
+  return null;
 };
-
-const MAX_ARCHETYPE_TAGS = 2;
 
 export default function PlayerDetails() {
   const { id } = useParams();
@@ -215,7 +199,7 @@ export default function PlayerDetails() {
   const [compareResults, setCompareResults] = useState([]);
   const [compareArchetypes, setCompareArchetypes] = useState({});
   const [comparePortalStatus, setComparePortalStatus] = useState({});
-  const [similarPortalOnly, setSimilarPortalOnly] = useState(true);
+  const [similarPortalOnly, setSimilarPortalOnly] = useState(false);
   const [similarBetterOrEqualOnly, setSimilarBetterOrEqualOnly] =
     useState(true);
   const [isCompareLoading, setIsCompareLoading] = useState(false);
@@ -287,8 +271,8 @@ export default function PlayerDetails() {
             {
               archetypes: [],
               portalStatus: {
-                label: "Portal: Not Available",
-                isAvailable: false,
+                label: "Portal data unavailable from source",
+                isAvailable: null,
               },
             },
           ];
@@ -361,6 +345,13 @@ export default function PlayerDetails() {
       });
       const similarPlayers = Array.isArray(data?.players) ? data.players : [];
       setCompareResults(similarPlayers);
+      if (similarPlayers.length === 0) {
+        setCompareError(
+          similarBetterOrEqualOnly
+            ? "No similar players matched with Better or Equal Only on. Turn it off to widen the results."
+            : "No similar players matched this player with the current filters.",
+        );
+      }
       await hydrateCompareMetadata(similarPlayers);
     } catch (err) {
       setCompareError("Failed to load similar players. Please try again.");
@@ -422,21 +413,23 @@ export default function PlayerDetails() {
               <h1>{player.name_split}</h1>
               <div className="player-subtitle">
                 <span>{player.team || "Unknown team"}</span>
-                <span>{player.position || "Unknown position"}</span>
+                {player.position ? <span>{player.position}</span> : null}
                 {player.class ? <span>{player.class}</span> : null}
               </div>
               {player.league ? (
                 <div className="player-league">{player.league}</div>
               ) : null}
-              <div
-                className={
-                  portalStatus.isAvailable
-                    ? "player-portal-badge player-portal-badge--available"
-                    : "player-portal-badge player-portal-badge--unavailable"
-                }
-              >
-                {portalStatus.label}
-              </div>
+              {portalStatus.isAvailable !== null ? (
+                <div
+                  className={
+                    portalStatus.isAvailable === true
+                      ? "player-portal-badge player-portal-badge--available"
+                      : "player-portal-badge player-portal-badge--unavailable"
+                  }
+                >
+                  {portalStatus.label}
+                </div>
+              ) : null}
             </div>
 
             <div className="player-report-section">
@@ -472,6 +465,22 @@ export default function PlayerDetails() {
             </div>
 
             <div className="player-section">
+              <h3 className="player-section-subtitle">Key Stats</h3>
+              <div className="player-stats-grid">
+                <StatCard label="PSP" value={player.psp} />
+                <StatCard label="3PE" value={player.c_3pe} isPercentage />
+                <StatCard label="FGS" value={player.fgs} />
+                <StatCard label="ATR" value={player.ram} />
+                <StatCard label="DSI" value={player.dsi} />
+                <StatCard label="USG%" value={player.usg} isPercentage />
+                <StatCard label="PPG" value={player.pts_g} />
+                <StatCard label="RPG" value={player.reb_g} />
+                <StatCard label="APG" value={player.ast_g} />
+                <StatCard label="TS%" value={player.ts} isPercentage />
+              </div>
+            </div>
+
+            <div className="player-section">
               <h4 className="player-metrics-title">Archetypes</h4>
               <div className="player-archetypes">
                 {archetypes.length > 0 ? (
@@ -490,8 +499,33 @@ export default function PlayerDetails() {
                 player={player}
                 comparisonPlayer={comparisonPlayer}
               />
+            </div>
 
-              <div className="player-compare-section">
+            <div className="player-section player-history-section">
+              <h3 className="player-section-subtitle">Progression</h3>
+              <PlayerProgressionCharts rows={seasonHistory} />
+            </div>
+
+            <div className="player-section player-history-section">
+              <h3 className="player-section-subtitle">Season history</h3>
+              {historyError ? (
+                <div className="player-history-note">{historyError}</div>
+              ) : null}
+              {historyIdentityMissing && !historyError ? (
+                <div className="player-history-note">
+                  This player record has no <code>name_home_dob</code> value, so
+                  past seasons cannot be matched. Ensure the column is populated
+                  on the current and historical tables.
+                </div>
+              ) : null}
+              <SeasonHistoryTable
+                rows={seasonHistory}
+                identityMissing={historyIdentityMissing}
+              />
+            </div>
+
+            <div className="player-section">
+              <div className="player-compare-section player-compare-section--standalone">
                 <div className="player-compare-header">
                   <h4>Compare with another player</h4>
                   {comparisonPlayer ? (
@@ -534,13 +568,25 @@ export default function PlayerDetails() {
                   >
                     Similar Players
                   </button>
-                  <label className="player-compare-toggle">
+                  <label
+                    className={`player-compare-toggle${PORTAL_DATA_AVAILABLE ? "" : " player-compare-toggle--disabled"}`}
+                    title={
+                      PORTAL_DATA_AVAILABLE
+                        ? ""
+                        : "Portal data is not exposed by the current source API."
+                    }
+                  >
                     <input
                       type="checkbox"
                       checked={similarPortalOnly}
                       onChange={(e) => setSimilarPortalOnly(e.target.checked)}
+                      disabled={!PORTAL_DATA_AVAILABLE}
                     />
-                    <span>Portal Only</span>
+                    <span>
+                      {PORTAL_DATA_AVAILABLE
+                        ? "Portal Only"
+                        : "Portal Filter Unavailable"}
+                    </span>
                   </label>
                   <label className="player-compare-toggle">
                     <input
@@ -585,18 +631,22 @@ export default function PlayerDetails() {
                               {candidate.name_split}
                             </span>
                             <span className="player-compare-meta">
-                              {candidate.team || "Unknown team"}
-                              {candidate.position
-                                ? ` • ${candidate.position}`
-                                : ""}
+                              {[candidate.team || "Unknown team", candidate.position]
+                                .filter(Boolean)
+                                .join(" • ")}
                             </span>
-                            {comparePortalStatus[candidate.unique_id] ? (
+                            {comparePortalStatus[candidate.unique_id] &&
+                            comparePortalStatus[candidate.unique_id]
+                              .isAvailable !== null ? (
                               <span
                                 className={
                                   comparePortalStatus[candidate.unique_id]
-                                    .isAvailable
+                                    .isAvailable === true
                                     ? "player-compare-portal player-compare-portal--available"
-                                    : "player-compare-portal player-compare-portal--unavailable"
+                                    : comparePortalStatus[candidate.unique_id]
+                                          .isAvailable === false
+                                      ? "player-compare-portal player-compare-portal--unavailable"
+                                      : "player-compare-portal player-compare-portal--unknown"
                                 }
                               >
                                 {comparePortalStatus[candidate.unique_id].label}
@@ -629,39 +679,6 @@ export default function PlayerDetails() {
               </div>
             </div>
 
-            <div className="player-section player-history-section">
-              <h3 className="player-section-subtitle">Season history</h3>
-              {historyError ? (
-                <div className="player-history-note">{historyError}</div>
-              ) : null}
-              {historyIdentityMissing && !historyError ? (
-                <div className="player-history-note">
-                  This player record has no <code>name_home_dob</code> value, so
-                  past seasons cannot be matched. Ensure the column is populated
-                  on the current and historical tables.
-                </div>
-              ) : null}
-              <SeasonHistoryTable
-                rows={seasonHistory}
-                identityMissing={historyIdentityMissing}
-              />
-            </div>
-
-            <div className="player-section">
-              <h3 className="player-section-subtitle">Key Stats</h3>
-              <div className="player-stats-grid">
-                <StatCard label="PSP" value={player.psp} />
-                <StatCard label="3PE" value={player.c_3pe} isPercentage />
-                <StatCard label="FGS" value={player.fgs} />
-                <StatCard label="ATR" value={player.ram} />
-                <StatCard label="DSI" value={player.dsi} />
-                <StatCard label="USG%" value={player.usg} isPercentage />
-                <StatCard label="PPG" value={player.pts_g} />
-                <StatCard label="RPG" value={player.reb_g} />
-                <StatCard label="APG" value={player.ast_g} />
-                <StatCard label="TS%" value={player.ts} isPercentage />
-              </div>
-            </div>
           </>
         ) : null}
       </div>

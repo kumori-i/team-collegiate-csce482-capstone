@@ -153,6 +153,51 @@ const normalizePositionForQuery = (message = "") => {
   return "";
 };
 
+const detectLeagueScope = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  if (
+    /\bncaa[-\s]?w\b|\bwomen'?s college\b|\bwomen'?s basketball\b|\bncaa women\b/.test(
+      text,
+    )
+  ) {
+    return "NCAA_W_DIV1";
+  }
+  if (
+    /\bncaa\b.*\bdivision 1\b|\bncaa\b.*\bdiv 1\b|\bncaa\b.*\bd1\b|\bncaa div 1\b|\bncaa division 1\b/.test(
+      text,
+    )
+  ) {
+    return "NCAA_DIV1";
+  }
+  if (
+    /\bcollege basketball\b|\bcollege hoops\b|\bdivision 1\b|\bdiv 1\b|\bd1\b/.test(
+      text,
+    )
+  ) {
+    return "COLLEGE_DIV1";
+  }
+  if (/\bnba\b/.test(text)) {
+    return "NBA";
+  }
+  return "";
+};
+
+const getCurrentBasketballSeasonLabel = (date = new Date()) => {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  const startYear = month >= 7 ? year : year - 1;
+  const endYearShort = String((startYear + 1) % 100).padStart(2, "0");
+  return `${startYear}-${endYearShort}`;
+};
+
+const getPreviousBasketballSeasonLabel = (date = new Date()) => {
+  const current = getCurrentBasketballSeasonLabel(date);
+  const startYear = Number(current.slice(0, 4));
+  const previousStart = startYear - 1;
+  const previousEndShort = String((previousStart + 1) % 100).padStart(2, "0");
+  return `${previousStart}-${previousEndShort}`;
+};
+
 const inferEfficiencyMetric = (message = "") => {
   const text = String(message).toLowerCase();
   if (/\btrue shooting\b|\bts\b/.test(text)) return "ts";
@@ -163,18 +208,57 @@ const inferEfficiencyMetric = (message = "") => {
   return "";
 };
 
+const TOP_METRIC_PATTERNS = [
+  {
+    metric: "pts_g",
+    pattern:
+      /\bpoints\b|\bpoint\b|\bppg\b|\bscoring\b|\bscore\b|\bscorer\b|\bscorers\b/,
+  },
+  {
+    metric: "reb_g",
+    pattern: /\brebounds?\b|\brebounders?\b|\brpg\b/,
+  },
+  {
+    metric: "ast_g",
+    pattern: /\bassists?\b|\bassist leaders?\b|\bassisters?\b|\bapg\b/,
+  },
+  {
+    metric: "stl_g",
+    pattern: /\bsteals?\b|\bsteal leaders?\b|\bspg\b/,
+  },
+  {
+    metric: "blk_g",
+    pattern: /\bblocks?\b|\bblockers?\b|\bbpg\b/,
+  },
+  {
+    metric: "usg",
+    pattern: /\busage\b/,
+  },
+  {
+    metric: "ft",
+    pattern: /\bfree throw\b|\bft%\b|\bft\b/,
+  },
+  {
+    metric: "c_3pt",
+    pattern: /\bthree point\b|\b3pt\b|\b3p\b/,
+  },
+  {
+    metric: "fg",
+    pattern: /\bfield goal\b|\bfg%\b|\bfg\b/,
+  },
+  {
+    metric: "orb_40",
+    pattern: /\borb_40\b|\boffensive rebound rate\b/,
+  },
+];
+
 const inferTopMetric = (message = "") => {
   const text = String(message).toLowerCase();
-  if (/\bpoints\b|\bscoring\b|\bscore\b/.test(text)) return "pts_g";
-  if (/\brebounds?\b/.test(text)) return "reb_g";
-  if (/\bassists?\b/.test(text)) return "ast_g";
-  if (/\bsteals?\b/.test(text)) return "stl_g";
-  if (/\bblocks?\b/.test(text)) return "blk_g";
-  if (/\busage\b/.test(text)) return "usg";
-  if (/\bfree throw\b|\bft%\b|\bft\b/.test(text)) return "ft";
-  if (/\bthree point\b|\b3pt\b|\b3p\b/.test(text)) return "c_3pt";
-  if (/\bfield goal\b|\bfg%\b|\bfg\b/.test(text)) return "fg";
-  if (/\borb_40\b|\boffensive rebound rate\b/.test(text)) return "orb_40";
+  for (const entry of TOP_METRIC_PATTERNS) {
+    if (entry.pattern.test(text)) {
+      return entry.metric;
+    }
+  }
 
   const efficiencyMetric = inferEfficiencyMetric(text);
   if (efficiencyMetric) {
@@ -193,8 +277,28 @@ const detectTopMetricByPositionIntent = (message = "") => {
   if (!metric) return null;
   return {
     position,
+    league: detectLeagueScope(text),
     metric,
     limit: 10,
+    minGames: 5,
+  };
+};
+
+const detectTopMetricIntent = (message = "") => {
+  const text = String(message || "").toLowerCase();
+  const rankingIntent = /\b(best|top|most|highest|leader|leaders)\b/.test(text);
+  if (!rankingIntent) return null;
+  const metric = inferTopMetric(text);
+  if (!metric) return null;
+  const countMatch = text.match(/\b(\d+)\b/);
+  return {
+    league: detectLeagueScope(text),
+    season: parseSeasonReference(text),
+    metric,
+    limit: Math.min(
+      25,
+      Math.max(1, Number.parseInt(countMatch?.[1] || "10", 10) || 10),
+    ),
     minGames: 5,
   };
 };
@@ -208,6 +312,7 @@ const detectCompositePositionIntent = (message = "") => {
   const focusMetric = inferEfficiencyMetric(text);
   return {
     position,
+    league: detectLeagueScope(text),
     focusMetric,
     limit: 10,
     minGames: 5,
@@ -421,9 +526,19 @@ const extractMetricsFromMessageText = (message = "") => {
 
 const parseSeasonReference = (message = "") => {
   const text = String(message || "").toLowerCase();
+  if (/\b(last|previous)\s+season\b|\bthis last season\b/.test(text)) {
+    return getPreviousBasketballSeasonLabel(new Date());
+  }
+  if (/\bthis season\b|\bcurrent season\b/.test(text)) {
+    return getCurrentBasketballSeasonLabel(new Date());
+  }
   const fullMatch = text.match(/\b(20\d{2}[-/_]\d{2})\b/);
   if (fullMatch?.[1]) {
     return fullMatch[1].replace(/[/_]/g, "-");
+  }
+  const yearOnlyMatch = text.match(/\b(20\d{2})\b/);
+  if (yearOnlyMatch?.[1]) {
+    return yearOnlyMatch[1];
   }
   const shortMatch = text.match(/\b(\d{2})[-/_](\d{2})\b/);
   if (!shortMatch) {
@@ -459,6 +574,18 @@ const normalizeSeasonKey = (value = "") =>
     .trim()
     .replace(/[\/_]/g, "-")
     .replace(/\s+/g, "");
+
+const seasonReferenceMatchesRow = (rowSeason = "", reference = "") => {
+  const normalizedRow = normalizeSeasonKey(rowSeason);
+  const normalizedRef = normalizeSeasonKey(reference);
+  if (!normalizedRow || !normalizedRef) return false;
+  if (normalizedRow === normalizedRef) return true;
+  if (/^\d{4}$/.test(normalizedRef)) {
+    return normalizedRow.includes(normalizedRef);
+  }
+  const refYearMatch = normalizedRef.match(/(20\d{2})/);
+  return Boolean(refYearMatch?.[1] && normalizedRow.includes(refYearMatch[1]));
+};
 
 const inferSeasonMetricFromHistory = (history = []) => {
   const normalized = Array.isArray(history) ? history : [];
@@ -1020,6 +1147,69 @@ const metricLabel = (metric) => {
   return labels[metric] || metric;
 };
 
+const leagueScopeLabel = (league = "") => {
+  switch (league) {
+    case "COLLEGE_DIV1":
+      return "college basketball";
+    case "NCAA_DIV1":
+      return "NCAA Division 1";
+    case "NCAA_W_DIV1":
+      return "NCAA women's Division 1";
+    case "NBA":
+      return "NBA";
+    default:
+      return "";
+  }
+};
+
+const formatTopPlayersListReply = ({
+  result,
+  metric,
+  season = "",
+  league = "",
+  userMessage = "",
+}) => {
+  const players = Array.isArray(result?.players) ? result.players : [];
+  const rankingLabel =
+    metric === "pts_g"
+      ? "scorers"
+      : metric === "reb_g"
+        ? "rebounders"
+        : metric === "ast_g"
+          ? "assist leaders"
+          : "players";
+  const metricShortLabel =
+    metric === "pts_g"
+      ? "PPG"
+      : metric === "reb_g"
+        ? "RPG"
+        : metric === "ast_g"
+          ? "APG"
+          : metricLabel(metric);
+  const scopeParts = [];
+  if (season) {
+    scopeParts.push(`for the ${season} season`);
+  } else if (/\bright now\b/i.test(userMessage)) {
+    scopeParts.push("right now");
+  }
+  const leagueLabel = leagueScopeLabel(league);
+  if (leagueLabel) {
+    scopeParts.push(`in ${leagueLabel}`);
+  }
+  const scopeText = scopeParts.length > 0 ? ` ${scopeParts.join(" ")}` : "";
+
+  if (players.length === 0) {
+    return `I could not find any players${scopeText} for ${metricLabel(metric)} in the database.`;
+  }
+
+  const lines = players.map(
+    (player, index) =>
+      `${index + 1}. ${player.name_split} - ${player.team || "Unknown team"}, ${player.league || "Unknown league"}: ${formatMetricValue(metric, player?.[metric])}`,
+  );
+
+  return `Here are the top ${players.length} ${rankingLabel}${scopeText} based on ${metricShortLabel}:\n\n${lines.join("\n")}`;
+};
+
 const pickBestPlayerMatch = (playerName, matches) => {
   if (!playerName || !Array.isArray(matches) || matches.length === 0) {
     return null;
@@ -1350,12 +1540,14 @@ export const runToolPlan = async (plan) => {
       query,
       team: args.team || "",
       position: args.position || "",
+      league: args.league || "",
       limit: args.limit || 20,
     });
     const players = await searchPlayers({
       query,
       team: args.team || "",
       position: args.position || "",
+      league: args.league || "",
       limit: args.limit || 20,
     });
     return { tool: "search_players", result: players };
@@ -1373,6 +1565,9 @@ export const runToolPlan = async (plan) => {
       metric: args.metric || "pts_g",
       position: args.position || "",
       team: args.team || "",
+      league: args.league || "",
+      season: args.season || "",
+      includePostseason: Boolean(args.includePostseason),
       limit: args.limit || 10,
       minGames: args.minGames || 5,
     });
@@ -1380,6 +1575,9 @@ export const runToolPlan = async (plan) => {
       metric: args.metric || "pts_g",
       position: args.position || "",
       team: args.team || "",
+      league: args.league || "",
+      season: args.season || "",
+      includePostseason: Boolean(args.includePostseason),
       limit: args.limit || 10,
       minGames: args.minGames || 5,
     });
@@ -1393,6 +1591,9 @@ export const runToolPlan = async (plan) => {
     logToolInvocation("top_players_by_position", {
       position: args.position || "",
       team: args.team || "",
+      league: args.league || "",
+      season: args.season || "",
+      includePostseason: Boolean(args.includePostseason),
       limit: args.limit || 10,
       minGames: args.minGames || 5,
       focusMetric: args.focusMetric || "",
@@ -1400,6 +1601,9 @@ export const runToolPlan = async (plan) => {
     const result = await getTopPlayersByPosition({
       position: args.position || "",
       team: args.team || "",
+      league: args.league || "",
+      season: args.season || "",
+      includePostseason: Boolean(args.includePostseason),
       limit: args.limit || 10,
       minGames: args.minGames || 5,
       focusMetric: args.focusMetric || "",
@@ -1722,7 +1926,8 @@ export const runChatAgent = async (
 
       const matchingSeason = Array.isArray(seasonHistory.seasons)
         ? seasonHistory.seasons.find(
-            (row) => normalizeSeasonKey(row?.season) === targetSeasonKey,
+            (row) =>
+              seasonReferenceMatchesRow(row?.season, targetSeasonKey),
           )
         : null;
 
@@ -2237,6 +2442,35 @@ If tool result is empty, say there is not enough database evidence and ask a cla
     });
   }
 
+  const topMetricIntent = detectTopMetricIntent(normalizedMessage);
+  if (topMetricIntent) {
+    const topMetricResult = await runToolPlan({
+      tool: "top_players",
+      args: topMetricIntent,
+    });
+    const reply = formatTopPlayersListReply({
+      result: topMetricResult.result,
+      metric: topMetricIntent.metric,
+      season: topMetricIntent.season || "",
+      league: topMetricIntent.league || "",
+      userMessage: message,
+    });
+    setSessionPlayer(
+      safeSessionId,
+      extractPrimaryPlayerFromToolResult(topMetricResult),
+    );
+    setSessionCohort(
+      safeSessionId,
+      extractCohortFromToolResult(topMetricResult),
+    );
+    return finish({
+      reply,
+      toolUsed: topMetricResult.tool,
+      evidence: topMetricResult.result,
+      chartSpec: null,
+    });
+  }
+
   const compositePositionIntent =
     detectCompositePositionIntent(normalizedMessage);
   if (compositePositionIntent) {
@@ -2281,6 +2515,16 @@ If tool result is empty, say there is not enough database evidence and ask a cla
   }
 
   let plan = await decideChatTool(normalizedMessage, { historyText, userId });
+  const inferredLeague = detectLeagueScope(normalizedMessage);
+  if (inferredLeague) {
+    plan = {
+      ...plan,
+      args: {
+        ...(plan.args || {}),
+        league: plan?.args?.league || inferredLeague,
+      },
+    };
+  }
 
   if (plan.tool === "get_player_by_id" && !plan.args?.id) {
     const remembered = getSessionPlayer(safeSessionId);

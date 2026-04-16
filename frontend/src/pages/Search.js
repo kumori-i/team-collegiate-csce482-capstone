@@ -115,25 +115,19 @@ const resolvePlayerArchetypes = (player) => {
   ).map((archetype) => archetype.name);
 };
 
-const resolvePortalAvailability = (player) => {
-  if (!player) {
-    return { label: "Portal: Not Available", isAvailable: false };
-  }
+const PORTAL_DATA_AVAILABLE = false;
+
+const resolveExplicitPortalValue = (player) => {
+  if (!player) return null;
 
   if (typeof player.portal_available === "boolean") {
-    return player.portal_available
-      ? { label: "Portal: Available", isAvailable: true }
-      : { label: "Portal: Not Available", isAvailable: false };
+    return player.portal_available;
   }
   if (typeof player.in_portal === "boolean") {
-    return player.in_portal
-      ? { label: "Portal: Available", isAvailable: true }
-      : { label: "Portal: Not Available", isAvailable: false };
+    return player.in_portal;
   }
   if (typeof player.transfer_portal === "boolean") {
-    return player.transfer_portal
-      ? { label: "Portal: Available", isAvailable: true }
-      : { label: "Portal: Not Available", isAvailable: false };
+    return player.transfer_portal;
   }
 
   const portalLikeEntries = Object.entries(player).filter(([key]) =>
@@ -141,14 +135,10 @@ const resolvePortalAvailability = (player) => {
   );
   for (const [, rawValue] of portalLikeEntries) {
     if (typeof rawValue === "boolean") {
-      return rawValue
-        ? { label: "Portal: Available", isAvailable: true }
-        : { label: "Portal: Not Available", isAvailable: false };
+      return rawValue;
     }
     if (typeof rawValue === "number") {
-      return rawValue > 0
-        ? { label: "Portal: Available", isAvailable: true }
-        : { label: "Portal: Not Available", isAvailable: false };
+      return rawValue > 0;
     }
     if (typeof rawValue === "string") {
       const text = rawValue.toLowerCase().trim();
@@ -157,42 +147,37 @@ const resolvePortalAvailability = (player) => {
           text,
         )
       ) {
-        return { label: "Portal: Available", isAvailable: true };
+        return true;
       }
       if (
         /\bno\b|\bfalse\b|\bnot available\b|\bnot in portal\b|\binactive\b/.test(
           text,
         )
       ) {
-        return { label: "Portal: Not Available", isAvailable: false };
+        return false;
       }
     }
   }
 
-  const combinedText = [
-    player.team,
-    player.league,
-    player.class,
-    player.status,
-    player.roster_status,
-  ]
-    .map((value) => String(value || "").toLowerCase())
-    .join(" ");
+  return null;
+};
 
-  const inPortalByText =
-    /\btransfer portal\b/.test(combinedText) ||
-    /\bin portal\b/.test(combinedText) ||
-    /\bportal\b/.test(combinedText);
-
-  return inPortalByText
-    ? { label: "Portal: Available", isAvailable: true }
-    : { label: "Portal: Not Available", isAvailable: false };
+const resolvePortalAvailability = (player) => {
+  const explicitValue = resolveExplicitPortalValue(player);
+  if (explicitValue === true) {
+    return { label: "Portal: Available", isAvailable: true };
+  }
+  if (explicitValue === false) {
+    return { label: "Portal: Not Available", isAvailable: false };
+  }
+  return { label: "Portal data unavailable from source", isAvailable: null };
 };
 
 const MAX_ARCHETYPE_TAGS = 2;
-
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [portalOnlyFilter, setPortalOnlyFilter] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [resultMetaById, setResultMetaById] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -204,7 +189,8 @@ export default function Search() {
 
   useEffect(() => {
     const query = searchQuery.trim();
-    if (!query) {
+    const team = teamFilter.trim();
+    if (!query && !team && !portalOnlyFilter) {
       setSearchResults([]);
       setResultMetaById({});
       setError("");
@@ -219,7 +205,11 @@ export default function Search() {
 
     const timer = setTimeout(async () => {
       try {
-        const data = await searchPlayers(query);
+        const data = await searchPlayers({
+          query,
+          team,
+          portalOnly: portalOnlyFilter,
+        });
         if (!cancelled) {
           // Backend returns { players: [...] }
           setSearchResults(data.players || []);
@@ -244,18 +234,23 @@ export default function Search() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searchQuery]);
+  }, [searchQuery, teamFilter, portalOnlyFilter]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
     const query = searchQuery.trim();
-    if (!query || isLoading) {
+    const team = teamFilter.trim();
+    if ((!query && !team && !portalOnlyFilter) || isLoading) {
       return;
     }
     setIsLoading(true);
     setError("");
     try {
-      const data = await searchPlayers(query);
+      const data = await searchPlayers({
+        query,
+        team,
+        portalOnly: portalOnlyFilter,
+      });
       setSearchResults(data.players || []);
       setResultMetaById({});
       setCurrentPage(1);
@@ -305,8 +300,8 @@ export default function Search() {
               {
                 archetypes: [],
                 portalStatus: {
-                  label: "Portal: Not Available",
-                  isAvailable: false,
+                  label: "Portal data unavailable from source",
+                  isAvailable: null,
                 },
               },
             ];
@@ -343,6 +338,35 @@ export default function Search() {
             {isLoading ? "Searching..." : "Search"}
           </button>
         </form>
+        <div className="search-filters">
+          <input
+            type="text"
+            placeholder="Filter by team"
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+            className="search-filter-input"
+          />
+          <label
+            className={`search-filter-toggle${PORTAL_DATA_AVAILABLE ? "" : " search-filter-toggle--disabled"}`}
+            title={
+              PORTAL_DATA_AVAILABLE
+                ? ""
+                : "Portal data is not exposed by the current source API."
+            }
+          >
+            <input
+              type="checkbox"
+              checked={portalOnlyFilter}
+              onChange={(e) => setPortalOnlyFilter(e.target.checked)}
+              disabled={!PORTAL_DATA_AVAILABLE}
+            />
+            <span>
+              {PORTAL_DATA_AVAILABLE
+                ? "Portal Only"
+                : "Portal Filter Unavailable"}
+            </span>
+          </label>
+        </div>
 
         {searchResults.length > 0 && (
           <div className="search-results">
@@ -370,18 +394,22 @@ export default function Search() {
                     >
                       <div>
                         <h3>{result.name_split}</h3>
-                        {result.team ? (
-                          <p className="result-meta">{result.team}</p>
+                        {result.team || result.position ? (
+                          <p className="result-meta">
+                            {[result.team || "Unknown team", result.position]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </p>
                         ) : null}
-                        {result.position ? (
-                          <p className="result-submeta">{result.position}</p>
-                        ) : null}
-                        {playerMeta?.portalStatus ? (
+                        {playerMeta?.portalStatus &&
+                        playerMeta.portalStatus.isAvailable !== null ? (
                           <span
                             className={
-                              playerMeta.portalStatus.isAvailable
+                              playerMeta.portalStatus.isAvailable === true
                                 ? "result-portal result-portal--available"
-                                : "result-portal result-portal--unavailable"
+                                : playerMeta.portalStatus.isAvailable === false
+                                  ? "result-portal result-portal--unavailable"
+                                  : "result-portal result-portal--unknown"
                             }
                           >
                             {playerMeta.portalStatus.label}
@@ -452,13 +480,13 @@ export default function Search() {
           </div>
         )}
 
-        {searchQuery &&
+        {(searchQuery || teamFilter || portalOnlyFilter) &&
           hasSearched &&
           searchResults.length === 0 &&
           !isLoading &&
           !error && (
             <div className="no-results">
-              <p>No results found for "{searchQuery}"</p>
+              <p>No results found for the current filters.</p>
             </div>
           )}
 
