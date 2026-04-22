@@ -19,7 +19,7 @@ export default function Navbar({
       navigate("/login");
       return;
     }
-    setShowProfileMenu(!showProfileMenu);
+    setShowProfileMenu((current) => !current);
   };
 
   const handleViewProfile = () => {
@@ -86,7 +86,14 @@ export default function Navbar({
               )}
             </span>
           </button>
-          <button className="profile-icon-btn" onClick={handleProfileClick}>
+          <button
+            className="profile-icon-btn"
+            onClick={handleProfileClick}
+            type="button"
+            aria-label={isAuthenticated ? "Open profile menu" : "Log in"}
+            aria-expanded={isAuthenticated ? showProfileMenu : undefined}
+            aria-haspopup={isAuthenticated ? "menu" : undefined}
+          >
             <svg
               width="32"
               height="32"
@@ -106,17 +113,29 @@ export default function Navbar({
           </button>
 
           {showProfileMenu && (
-            <div className="profile-menu">
-              <button onClick={handleViewProfile} className="profile-menu-item">
+            <div className="profile-menu" role="menu" aria-label="Profile menu">
+              <button
+                onClick={handleViewProfile}
+                className="profile-menu-item"
+                type="button"
+                role="menuitem"
+              >
                 View Profile
               </button>
               <button
                 onClick={handleViewCostDashboard}
                 className="profile-menu-item"
+                type="button"
+                role="menuitem"
               >
                 Cost Dashboard
               </button>
-              <button onClick={handleLogout} className="profile-menu-item">
+              <button
+                onClick={handleLogout}
+                className="profile-menu-item"
+                type="button"
+                role="menuitem"
+              >
                 Logout
               </button>
             </div>

@@ -1,48 +1,35 @@
 # Team Collegiate Capstone
 
-TEAM: Ethan Rendell, Harrison Ko, Joshua George, Robert Stacks
+Team: Ethan Rendell, Harrison Ko, Joshua George, Robert Stacks
 
-This repository contains a React frontend and Express backend for basketball player search, dataset-grounded chat, player reports, chart generation, and per-user model usage tracking.
+This repository contains the final React frontend and Express backend for player search, scouting reports, dataset-grounded chat, chart rendering, and per-user usage tracking.
 
 ## Stack
 
-- Frontend: React in [frontend/](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend)
-- Backend: Express in [backend/](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend)
-- Data: Company GraphQL API (Cerebro)
-- Auth: JWT with Google login support
-- AI providers: Gemini, TAMU-protected models, or Ollama
+- Frontend: React in [frontend](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend)
+- Backend: Express in [backend](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend)
+- Player data: Company GraphQL API
+- Auth: JWT with email/password and Google sign-in
+- AI providers: Gemini, TAMU protected models, or Ollama
+- Persistence: Supabase when configured, otherwise local JSON fallback for auth and usage data
 
-## Recommended Setup Path
+## Recommended Handoff Setup
 
-For a new user receiving this repo, the recommended documented setup is Gemini.
+The simplest handoff path is:
 
-Use:
+1. Company GraphQL API credentials for player data
+2. Gemini for AI generation
+3. Optional Supabase for persistent auth and usage storage
 
-- Company GraphQL API for player/event data
-- Gemini for AI generation
+Gemini is the recommended default because it only requires a Gemini API key. TAMU and Ollama remain supported.
 
-TAMU and Ollama remain supported, but Gemini is the easiest handoff path because it only requires a Gemini API key instead of access to a protected TAMU deployment.
+## Quick Start
 
-## Repository Layout
-
-```text
-.
-├── backend/
-│   ├── README.md
-│   └── docs/
-├── frontend/
-│   ├── README.md
-│   └── docs/
-└── docs/
-```
-
-## Backend Setup
-
-1. Install backend dependencies:
+1. Install dependencies:
 
 ```bash
-cd backend
-npm install
+cd backend && npm install
+cd ../frontend && npm install
 ```
 
 2. Create `backend/.env`:
@@ -55,82 +42,48 @@ COMPANY_AUTH_URL=https://hasura-auth-api-960327267159.us-east4.run.app
 COMPANY_GRAPHQL_URL=https://hasura-graphql-engine-960327267159.us-east4.run.app/v1/graphql
 COMPANY_API_EMAIL=your_company_api_email
 COMPANY_API_PASSWORD=your_company_api_password
-# Optional direct token path instead of email/password login:
-# COMPANY_API_JWT=...
-# COMPANY_API_REFRESH_TOKEN=...
 
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_CHAT_MODEL=gemini-2.5-flash
 ```
 
-Optional provider alternatives:
+Optional backend additions:
 
 ```env
-LLM_PROVIDER=tamu
-TAMU_API_KEY=your_tamu_key
-TAMU_BASE_URL=https://chat.tamu.ai
-TAMU_CHAT_MODELS=protected.gpt-4o,protected.gpt-4.1,protected.o3-mini
+GOOGLE_CLIENT_ID=your_google_client_id
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+FRONTEND_URL=http://localhost:3000
 ```
 
-or
-
-```env
-LLM_PROVIDER=ollama
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1
-```
-
-3. Run the Supabase SQL setup:
-
-- [backend/docs/supabase/SUPABASE_SETUP.sql](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/supabase/SUPABASE_SETUP.sql)
-
-4. Start the backend:
-
-```bash
-cd backend
-npm run dev
-```
-
-## Frontend Setup
-
-1. Install frontend dependencies:
-
-```bash
-cd frontend
-npm install
-```
-
-2. Optional frontend env:
+3. Optional frontend env in `frontend/.env`:
 
 ```env
 REACT_APP_API_URL=http://localhost:5001/api
 REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id
 ```
 
-3. Start the frontend:
+4. Start the apps:
+
+```bash
+cd backend
+npm run dev
+```
 
 ```bash
 cd frontend
 npm start
 ```
 
-## API and Docs
+## Verification Commands
 
-- Swagger docs: `http://localhost:5001/api/docs`
-- Backend docs index: [backend/README.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/README.md)
-- Frontend docs index: [frontend/README.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend/README.md)
-
-## Testing
-
-Backend:
+These are the commands used for final verification:
 
 ```bash
 cd backend
 npm test
 ```
-
-Frontend:
 
 ```bash
 cd frontend
@@ -138,8 +91,12 @@ CI=true npm test -- --watch=false
 npm run build
 ```
 
-## Additional Project Documents
+## Documentation Map
 
+- Backend overview: [backend/README.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/README.md)
+- Frontend overview: [frontend/README.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend/README.md)
+- Backend quick start: [backend/docs/QUICK_START.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/QUICK_START.md)
+- Swagger UI: `http://localhost:5001/api/docs`
 - Backend validation plan: [backend/docs/TEST_VALIDATION_PLAN.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/TEST_VALIDATION_PLAN.md)
 - Frontend architecture: [frontend/docs/FRONTEND_ARCHITECTURE.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend/docs/FRONTEND_ARCHITECTURE.md)
 - Frontend user testing: [frontend/docs/FRONTEND_USER_TESTING.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/frontend/docs/FRONTEND_USER_TESTING.md)

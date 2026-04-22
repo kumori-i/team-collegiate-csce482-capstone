@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Chat from "./Chat";
 
@@ -15,6 +15,13 @@ jest.mock("../components/ChatMetricChart", () => (props) => (
 jest.mock("react-markdown", () => (props) => <>{props.children}</>);
 
 const { chatWithAgentStream, getChatSuggestions } = require("../api");
+
+const clickSendAndFlush = async () => {
+  await act(async () => {
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await Promise.resolve();
+  });
+};
 
 describe("Chat", () => {
   beforeEach(() => {
@@ -48,7 +55,7 @@ describe("Chat", () => {
       screen.getByPlaceholderText(/type a message/i),
       "tell me cameron boozer's archetypes",
     );
-    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await clickSendAndFlush();
 
     expect(await screen.findByText(/modern big/i)).toBeInTheDocument();
     await waitFor(() =>
@@ -78,7 +85,7 @@ describe("Chat", () => {
       screen.getByPlaceholderText(/type a message/i),
       "generate a chart for cameron boozer",
     );
-    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await clickSendAndFlush();
 
     expect(await screen.findByTestId("chat-metric-chart")).toBeInTheDocument();
     await waitFor(() =>
@@ -98,7 +105,7 @@ describe("Chat", () => {
       screen.getByPlaceholderText(/type a message/i),
       "test message",
     );
-    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await clickSendAndFlush();
 
     await waitFor(() => expect(onLogout).toHaveBeenCalledTimes(1));
   });
@@ -142,7 +149,7 @@ describe("Chat", () => {
       screen.getByPlaceholderText(/type a message/i),
       "generate a chart for cameron boozer",
     );
-    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await clickSendAndFlush();
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /send/i })).not.toBeDisabled(),

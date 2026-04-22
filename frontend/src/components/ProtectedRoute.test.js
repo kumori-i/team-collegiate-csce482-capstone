@@ -2,6 +2,11 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 
+const routerFuture = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true,
+};
+
 const createToken = (expOffsetSeconds = 3600) => {
   const payload = btoa(
     JSON.stringify({
@@ -18,7 +23,7 @@ describe("ProtectedRoute", () => {
 
   test("redirects to login when token is missing", () => {
     render(
-      <MemoryRouter initialEntries={["/protected"]}>
+      <MemoryRouter initialEntries={["/protected"]} future={routerFuture}>
         <Routes>
           <Route
             path="/login"
@@ -43,7 +48,7 @@ describe("ProtectedRoute", () => {
     localStorage.setItem("token", createToken());
 
     render(
-      <MemoryRouter initialEntries={["/protected"]}>
+      <MemoryRouter initialEntries={["/protected"]} future={routerFuture}>
         <Routes>
           <Route
             path="/login"

@@ -1,15 +1,10 @@
-// frontend/src/api.js
 import axios from "axios";
 import { getValidStoredToken } from "./auth";
 
-// Use explicit URL if provided, otherwise use proxy
-// If REACT_APP_API_URL is set, use it; otherwise use proxy path
+// Use an explicit backend URL when provided; otherwise default to the local backend.
 const API_URL = process.env.REACT_APP_API_URL
   ? process.env.REACT_APP_API_URL
   : "http://localhost:5001/api";
-
-// Debug: Log the API URL being used
-console.log("API URL:", API_URL);
 
 export const loginWithGoogle = async (idToken) => {
   const res = await axios.post(`${API_URL}/auth/google`, { idToken });

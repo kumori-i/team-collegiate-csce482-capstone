@@ -10,6 +10,11 @@ jest.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
 }));
 
+const routerFuture = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true,
+};
+
 describe("Navbar", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
@@ -17,15 +22,21 @@ describe("Navbar", () => {
 
   test("opens profile menu and navigates to cost dashboard", async () => {
     render(
-      <MemoryRouter>
-        <Navbar onLogout={jest.fn()} theme="light" onToggleTheme={jest.fn()} />
+      <MemoryRouter future={routerFuture}>
+        <Navbar
+          isAuthenticated
+          onLogout={jest.fn()}
+          theme="light"
+          onToggleTheme={jest.fn()}
+        />
       </MemoryRouter>,
     );
 
-    const buttons = screen.getAllByRole("button");
-    await userEvent.click(buttons[1]);
     await userEvent.click(
-      screen.getByRole("button", { name: /cost dashboard/i }),
+      screen.getByRole("button", { name: /open profile menu/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /cost dashboard/i }),
     );
 
     expect(mockNavigate).toHaveBeenCalledWith("/cost-dashboard");
@@ -35,14 +46,20 @@ describe("Navbar", () => {
     const onLogout = jest.fn();
 
     render(
-      <MemoryRouter>
-        <Navbar onLogout={onLogout} theme="dark" onToggleTheme={jest.fn()} />
+      <MemoryRouter future={routerFuture}>
+        <Navbar
+          isAuthenticated
+          onLogout={onLogout}
+          theme="dark"
+          onToggleTheme={jest.fn()}
+        />
       </MemoryRouter>,
     );
 
-    const buttons = screen.getAllByRole("button");
-    await userEvent.click(buttons[1]);
-    await userEvent.click(screen.getByRole("button", { name: /logout/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /open profile menu/i }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: /logout/i }));
 
     expect(onLogout).toHaveBeenCalledTimes(1);
   });

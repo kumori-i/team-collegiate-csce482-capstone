@@ -1,24 +1,24 @@
 # Backend Overview
 
-This backend is an Express service backed by Supabase for application data and a configurable LLM provider for chat and report generation.
+The backend is an Express API that handles authentication, player data access, chat/report orchestration, and usage tracking.
 
-## Core Responsibilities
+## What It Depends On
 
-- user authentication and JWT issuance
-- player search and player detail APIs
-- agent-driven chat and report orchestration
-- model usage and cost tracking
-- Swagger API documentation
+- Company GraphQL API for player search, detail, similarity, and history
+- One LLM provider for chat and report generation: Gemini, TAMU, or Ollama
+- Supabase for persistent auth and usage storage, or the built-in `.data/app-db.json` fallback when Supabase is not configured
 
-## Documentation
+## Main Routes
 
-- Quick start: [docs/QUICK_START.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/QUICK_START.md)
-- API docs note: [docs/API_DOCUMENTATION.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/API_DOCUMENTATION.md)
-- Validation plan: [docs/TEST_VALIDATION_PLAN.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/TEST_VALIDATION_PLAN.md)
-- Migration summary: [docs/MIGRATION_SUMMARY.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/MIGRATION_SUMMARY.md)
-- Supabase setup: [docs/supabase/SUPABASE_SETUP.sql](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/supabase/SUPABASE_SETUP.sql)
+- `/api/auth` for registration, login, Google sign-in, profile, and account deletion
+- `/api/players` for search, detail, history, similar players, and reports
+- `/api/agent` for streamed chat, reports, session reset, and suggestions
+- `/api/usage` for the authenticated usage dashboard
+- `/api/docs` and `/api/openapi.json` for Swagger documentation
 
 ## Local Development
+
+The server loads `backend/.env` and then `backend/.env.local` if present.
 
 ```bash
 cd backend
@@ -26,4 +26,19 @@ npm install
 npm run dev
 ```
 
+Run tests:
+
+```bash
+cd backend
+npm test
+```
+
 Swagger UI is available at `http://localhost:5001/api/docs`.
+
+## Documentation
+
+- Quick start: [docs/QUICK_START.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/QUICK_START.md)
+- API docs note: [docs/API_DOCUMENTATION.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/API_DOCUMENTATION.md)
+- Validation plan: [docs/TEST_VALIDATION_PLAN.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/TEST_VALIDATION_PLAN.md)
+- Migration summary: [docs/MIGRATION_SUMMARY.md](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/MIGRATION_SUMMARY.md)
+- Supabase setup SQL: [docs/supabase/SUPABASE_SETUP.sql](/Users/user/pgrm/github/team-collegiate-csce482-capstone/backend/docs/supabase/SUPABASE_SETUP.sql)
