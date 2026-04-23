@@ -564,7 +564,9 @@ export const searchPlayers = async ({
     }
   `;
   const data = await runCompanyGraphql(gql);
-  const players = (data?.player || []).map(mapCompanyRowToPlayer);
+  const players = (data?.player || [])
+    .map(mapCompanyRowToPlayer)
+    .filter((player) => player?.unique_id);
   return portalOnly ? players.filter((player) => isPortalAvailable(player)) : players;
 };
 

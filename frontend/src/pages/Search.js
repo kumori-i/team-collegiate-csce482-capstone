@@ -174,6 +174,12 @@ const resolvePortalAvailability = (player) => {
 };
 
 const MAX_ARCHETYPE_TAGS = 2;
+
+const normalizeSearchResults = (players) =>
+  (Array.isArray(players) ? players : []).filter(
+    (player) => player && typeof player === "object" && player.unique_id,
+  );
+
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
@@ -211,8 +217,7 @@ export default function Search() {
           portalOnly: portalOnlyFilter,
         });
         if (!cancelled) {
-          // Backend returns { players: [...] }
-          setSearchResults(data.players || []);
+          setSearchResults(normalizeSearchResults(data.players));
           setResultMetaById({});
           setCurrentPage(1);
           setHasSearched(true);
@@ -251,7 +256,7 @@ export default function Search() {
         team,
         portalOnly: portalOnlyFilter,
       });
-      setSearchResults(data.players || []);
+      setSearchResults(normalizeSearchResults(data.players));
       setResultMetaById({});
       setCurrentPage(1);
       setHasSearched(true);
